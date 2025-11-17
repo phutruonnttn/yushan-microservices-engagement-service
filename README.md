@@ -1,8 +1,10 @@
 # Yushan Engagement Service
 
-> 💬 **Engagement Service for Yushan Webnovel Platform.** - Manages user interactions including comments, reviews, ratings, likes, bookmarks, and social features to foster community engagement.
+> 💬 **Engagement Service for Yushan Platform (Phase 2 - Microservices)** - Manages user interactions including comments, reviews, ratings, votes, and social features to foster community engagement.
 
-# Yushan Platform - Engagement Service Setup Guide
+## 📋 Overview
+
+Engagement Service is one of the main microservices of Yushan Platform (Phase 2), responsible for managing all user social interactions. This service uses Kafka to publish events for Gamification Service and integrates with other services via Feign clients.
 
 ## Architecture Overview
 
@@ -55,8 +57,8 @@ Before setting up the Engagement Service, ensure you have:
 
 ```bash
 # Clone the service registry repository
-git clone https://github.com/maugus0/yushan-platform-service-registry
-cd yushan-platform-service-registry
+git clone https://github.com/phutruonnttn/yushan-microservices-service-registry
+cd yushan-microservices-service-registry
 
 # Option 1: Run with Docker (Recommended)
 docker-compose up -d
@@ -75,8 +77,8 @@ docker-compose up -d
 ## Step 2: Clone the Engagement Service Repository
 
 ```bash
-git clone https://github.com/maugus0/yushan-engagement-service.git
-cd yushan-engagement-service
+git clone https://github.com/phutruonnttn/yushan-microservices-engagement-service.git
+cd yushan-microservices-engagement-service
 
 # Option 1: Run with Docker (Recommended)
 docker-compose up -d
@@ -115,153 +117,95 @@ Instances currently registered with Eureka:
 - **GET** `/api/v1/health` - Service health status
 
 ### Comments
-- **POST** `/api/v1/comments` - Create a comment
-- **GET** `/api/v1/comments/{commentId}` - Get comment details
-- **PUT** `/api/v1/comments/{commentId}` - Update comment
-- **DELETE** `/api/v1/comments/{commentId}` - Delete comment
-- **GET** `/api/v1/comments/novels/{novelId}` - Get novel comments
-- **GET** `/api/v1/comments/chapters/{chapterId}` - Get chapter comments
-- **POST** `/api/v1/comments/{commentId}/reply` - Reply to comment
-- **GET** `/api/v1/comments/{commentId}/replies` - Get comment replies
+- **POST** `/api/v1/comments` - Create a comment (one per chapter per user)
+- **GET** `/api/v1/comments/{id}` - Get comment details
+- **PUT** `/api/v1/comments/{id}` - Update comment (author only)
+- **DELETE** `/api/v1/comments/{id}` - Delete comment (author or admin)
+- **GET** `/api/v1/comments/chapter/{chapterId}` - Get chapter comments (with pagination)
+- **GET** `/api/v1/comments/novel/{novelId}` - Get novel comments (across all chapters)
+- **POST** `/api/v1/comments/{id}/like` - Like a comment
+- **POST** `/api/v1/comments/{id}/unlike` - Unlike a comment
+- **GET** `/api/v1/comments/my-comments` - Get current user's comments
+- **GET** `/api/v1/comments/check/chapter/{chapterId}` - Check if user has commented on chapter
+- **GET** `/api/v1/comments/chapter/{chapterId}/statistics` - Get chapter comment statistics
+
+#### Admin Comment Endpoints
+- **GET** `/api/v1/comments/admin/moderation` - List comments for moderation (with filters)
+- **GET** `/api/v1/comments/admin/all` - List all comments (admin search/filter)
+- **GET** `/api/v1/comments/admin/search` - Advanced search for comments
+- **GET** `/api/v1/comments/admin/user/{userId}` - Get comments by specific user
+- **GET** `/api/v1/comments/admin/statistics` - Get moderation statistics
+- **DELETE** `/api/v1/comments/admin/{id}` - Delete any comment (admin only)
+- **POST** `/api/v1/comments/admin/batch-delete` - Batch delete comments
+- **DELETE** `/api/v1/comments/admin/user/{userId}/all` - Delete all user's comments
+- **DELETE** `/api/v1/comments/admin/chapter/{chapterId}/all` - Delete all chapter comments
+- **PATCH** `/api/v1/comments/admin/bulk-spoiler` - Bulk update spoiler status
 
 ### Reviews
-- **POST** `/api/v1/reviews` - Create a review
-- **GET** `/api/v1/reviews/{reviewId}` - Get review details
-- **PUT** `/api/v1/reviews/{reviewId}` - Update review
-- **DELETE** `/api/v1/reviews/{reviewId}` - Delete review
-- **GET** `/api/v1/reviews/novels/{novelId}` - Get novel reviews
-- **GET** `/api/v1/reviews/users/{userId}` - Get user's reviews
+- **POST** `/api/v1/reviews` - Create a review (one per novel per user)
+- **GET** `/api/v1/reviews/{id}` - Get review details
+- **PUT** `/api/v1/reviews/{id}` - Update review (author only)
+- **DELETE** `/api/v1/reviews/{id}` - Delete review (author or admin)
+- **GET** `/api/v1/reviews/novel/{novelId}` - Get novel reviews (with pagination)
+- **GET** `/api/v1/reviews` - List all reviews (with filters and pagination)
+- **POST** `/api/v1/reviews/{id}/like` - Like a review
+- **POST** `/api/v1/reviews/{id}/unlike` - Unlike a review
+- **GET** `/api/v1/reviews/my-reviews` - Get current user's reviews
+- **GET** `/api/v1/reviews/my-reviews/novel/{novelId}` - Get user's review for a novel
+- **GET** `/api/v1/reviews/check/{novelId}` - Check if user has reviewed a novel
+- **GET** `/api/v1/reviews/novel/{novelId}/rating-stats` - Get novel rating statistics (admin only)
 
-### Ratings
-- **POST** `/api/v1/ratings` - Rate content (novel/chapter)
-- **GET** `/api/v1/ratings/novels/{novelId}` - Get novel rating summary
-- **GET** `/api/v1/ratings/users/{userId}/novel/{novelId}` - Get user's rating
-- **PUT** `/api/v1/ratings/{ratingId}` - Update rating
-- **DELETE** `/api/v1/ratings/{ratingId}` - Delete rating
+#### Admin Review Endpoints
+- **GET** `/api/v1/reviews/admin/all` - List all reviews (admin view)
+- **DELETE** `/api/v1/reviews/admin/{id}` - Delete any review (admin only)
 
-### Likes
-- **POST** `/api/v1/likes` - Like content (comment/review/chapter)
-- **DELETE** `/api/v1/likes/{likeId}` - Unlike content
-- **GET** `/api/v1/likes/users/{userId}` - Get user's likes
-- **GET** `/api/v1/likes/content/{contentId}` - Get likes for content
+### Votes
+- **POST** `/api/v1/votes/novels/{novelId}` - Vote for a novel (can vote multiple times)
+- **GET** `/api/v1/votes/users` - Get current user's vote history (with pagination)
 
-### Bookmarks
-- **POST** `/api/v1/bookmarks` - Bookmark a novel/chapter
-- **DELETE** `/api/v1/bookmarks/{bookmarkId}` - Remove bookmark
-- **GET** `/api/v1/bookmarks/users/{userId}` - Get user's bookmarks
-- **PUT** `/api/v1/bookmarks/{bookmarkId}` - Update bookmark (add notes)
+### Reports
+- **POST** `/api/v1/reports/novel/{novelId}` - Report a novel (one per novel per user)
+- **POST** `/api/v1/reports/comment/{commentId}` - Report a comment (one per comment per user)
+- **GET** `/api/v1/reports/my-reports` - Get current user's reports
 
-### Reading Progress
-- **POST** `/api/v1/reading-progress` - Update reading progress
-- **GET** `/api/v1/reading-progress/users/{userId}/novel/{novelId}` - Get progress
-- **GET** `/api/v1/reading-progress/users/{userId}` - Get all user progress
-- **DELETE** `/api/v1/reading-progress/{progressId}` - Clear progress
-
-### Follows
-- **POST** `/api/v1/follows/users/{targetUserId}` - Follow a user
-- **DELETE** `/api/v1/follows/users/{targetUserId}` - Unfollow a user
-- **GET** `/api/v1/follows/users/{userId}/followers` - Get followers
-- **GET** `/api/v1/follows/users/{userId}/following` - Get following
-- **POST** `/api/v1/follows/novels/{novelId}` - Follow a novel
-- **DELETE** `/api/v1/follows/novels/{novelId}` - Unfollow a novel
-
-### Reading Lists
-- **POST** `/api/v1/reading-lists` - Create reading list
-- **GET** `/api/v1/reading-lists/{listId}` - Get reading list
-- **PUT** `/api/v1/reading-lists/{listId}` - Update reading list
-- **DELETE** `/api/v1/reading-lists/{listId}` - Delete reading list
-- **POST** `/api/v1/reading-lists/{listId}/novels/{novelId}` - Add novel to list
-- **DELETE** `/api/v1/reading-lists/{listId}/novels/{novelId}` - Remove novel from list
-- **GET** `/api/v1/reading-lists/users/{userId}` - Get user's reading lists
-
-### Notifications
-- **GET** `/api/v1/notifications/users/{userId}` - Get user notifications
-- **PUT** `/api/v1/notifications/{notificationId}/read` - Mark as read
-- **PUT** `/api/v1/notifications/users/{userId}/read-all` - Mark all as read
-- **DELETE** `/api/v1/notifications/{notificationId}` - Delete notification
-
-### Recommendations
-- **GET** `/api/v1/recommendations/users/{userId}` - Get personalized recommendations
-- **GET** `/api/v1/recommendations/novels/{novelId}/similar` - Get similar novels
-- **GET** `/api/v1/recommendations/trending` - Get trending content
+#### Admin Report Endpoints
+- **GET** `/api/v1/reports/admin` - Get all reports (with pagination and filtering)
+- **GET** `/api/v1/reports/admin/{reportId}` - Get report details
+- **PUT** `/api/v1/reports/admin/{reportId}/resolve` - Resolve a report
 
 ---
 
 ## Key Features
 
 ### 💬 Comment System
-- Nested comments (replies)
-- Comment threads
-- Comment editing and deletion
+- One comment per chapter per user
+- Comment editing and deletion (author only)
 - Spoiler tags
-- Comment moderation
-- Report inappropriate comments
-- Comment sorting (newest, oldest, most liked)
+- Comment moderation (admin)
+- Like/unlike comments
+- Comment statistics
+- Advanced admin moderation tools
+- Batch operations for moderation
 
 ### ⭐ Review System
-- Star ratings (1-5)
-- Written reviews
-- Review voting (helpful/not helpful)
-- Review moderation
-- Featured reviews
-- Review templates
+- One review per novel per user
+- Star ratings (1-5) integrated in reviews
+- Written reviews with content
+- Review editing and deletion (author only)
+- Like/unlike reviews
+- Review moderation (admin)
+- Rating statistics aggregation
 
-### 📊 Rating System
-- Overall novel ratings
-- Chapter-level ratings
-- Aggregated rating statistics
-- Rating distribution
-- User rating history
+### 🗳️ Vote System
+- Vote for novels (can vote multiple times)
+- Vote history tracking
+- Integration with Gamification Service (Yuan deduction)
 
-### 👍 Like System
-- Like comments
-- Like reviews
-- Like chapters
-- Like notifications
-- Unlike functionality
-
-### 🔖 Bookmark System
-- Bookmark novels
-- Bookmark chapters
-- Bookmark collections
-- Personal notes on bookmarks
-- Bookmark folders/tags
-
-### 📖 Reading Progress Tracking
-- Current chapter tracking
-- Reading percentage
-- Last read timestamp
-- Continue reading feature
-- Progress sync across devices
-
-### 👥 Social Features
-- Follow users
-- Follow novels (get updates)
-- Follower/following lists
-- Activity feeds
-- User mentions in comments
-
-### 📚 Reading Lists
-- Create custom reading lists
-- Public/private lists
-- Collaborative lists
-- List sharing
-- Curated collections
-
-### 🔔 Notification System
-- Real-time notifications
-- Comment replies
-- New chapter alerts
-- Follow updates
-- Like notifications
-- Notification preferences
-
-### 🎯 Recommendation Engine
-- Personalized novel recommendations
-- Similar novel suggestions
-- Trending content
-- Genre-based recommendations
-- Collaborative filtering
+### 🚨 Report System
+- Report novels for inappropriate content
+- Report comments for inappropriate content
+- One report per content per user
+- Admin report resolution workflow
 
 ---
 
@@ -269,16 +213,10 @@ Instances currently registered with Eureka:
 
 The Engagement Service uses the following key entities:
 
-- **Comment** - User comments on novels/chapters
-- **Review** - User reviews with ratings
-- **Rating** - Numerical ratings for content
-- **Like** - Likes on various content types
-- **Bookmark** - Saved novels/chapters
-- **ReadingProgress** - User reading progress
-- **Follow** - User and novel follows
-- **ReadingList** - Custom reading lists
-- **Notification** - User notifications
-- **Report** - Content reports for moderation
+- **Comment** - User comments on chapters (one per chapter per user)
+- **Review** - User reviews with ratings (one per novel per user)
+- **Vote** - User votes for novels
+- **Report** - Content reports for moderation (novels and comments)
 
 ---
 
@@ -410,5 +348,14 @@ The Engagement Service exposes metrics through:
 
 ---
 
-## License
+## 📄 License
+
 This project is part of the Yushan Platform ecosystem.
+
+## 🔗 Links
+
+- **API Gateway**: [yushan-microservices-api-gateway](https://github.com/phutruonnttn/yushan-microservices-api-gateway)
+- **Service Registry**: [yushan-microservices-service-registry](https://github.com/phutruonnttn/yushan-microservices-service-registry)
+- **Config Server**: [yushan-microservices-config-server](https://github.com/phutruonnttn/yushan-microservices-config-server)
+- **Platform Documentation**: [yushan-platform-docs](https://github.com/phutruonnttn/yushan-platform-docs) - Complete documentation for all phases
+- **Phase 2 Architecture**: See [Phase 2 Microservices Architecture](https://github.com/phutruonnttn/yushan-platform-docs/blob/main/docs/phase2-microservices/PHASE2_MICROSERVICES_ARCHITECTURE.md)
