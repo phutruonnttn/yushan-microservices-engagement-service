@@ -83,15 +83,12 @@ jobs:
 
       - name: Run SpotBugs (static analysis)
         run: ./mvnw spotbugs:check
-        continue-on-error: true
 
       - name: Run Checkstyle (code style)
         run: ./mvnw checkstyle:check
-        continue-on-error: true
 
       - name: Generate SpotBugs SARIF
         run: ./mvnw spotbugs:spotbugs -Dspotbugs.outputFormat=sarif -Dspotbugs.outputFile=spotbugs.sarif
-        continue-on-error: true
 
       - name: Check if SARIF file exists
         run: |
@@ -119,7 +116,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        continue-on-error: true
 
   security-scan:
     name: Security Scan
@@ -150,7 +146,6 @@ jobs:
       # ✅ FIX: Clean corrupted OWASP database before running check
       - name: Clean OWASP Database (prevent corruption)
         run: rm -rf ~/.m2/repository/org/owasp/dependency-check-data
-        continue-on-error: true
 
       - name: Configure Maven settings for OSS Index
         run: |
@@ -169,20 +164,17 @@ jobs:
         env:
           OSSINDEX_USER: ${{ secrets.OSSINDEX_USER }}
           OSSINDEX_TOKEN: ${{ secrets.OSSINDEX_TOKEN }}
-        continue-on-error: true
 
       - name: Run OWASP Dependency Check
         env:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         run: ./mvnw -Dnvd.api.key="${NVD_API_KEY}" org.owasp:dependency-check-maven:check
-        continue-on-error: true
 
       - name: Upload Dependency-Check SARIF
         if: always() && hashFiles('target/dependency-check-report.sarif') != ''
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: target/dependency-check-report.sarif
-        continue-on-error: true
 
       - name: Upload OWASP Report
         uses: actions/upload-artifact@v4
@@ -192,14 +184,12 @@ jobs:
           path: |
             target/dependency-check-report.html
             target/dependency-check-report.xml
-        continue-on-error: true
 
       - name: Build (skip tests)
         run: ./mvnw -B -DskipTests package
 
       - name: Setup Snyk CLI
         uses: snyk/actions/setup@master
-        continue-on-error: true
 
       - name: Snyk test (export SARIF)
         env:
@@ -212,14 +202,12 @@ jobs:
             --project-name=${{ github.repository }} \
             --severity-threshold=high \
             --sarif --sarif-file-output=snyk.sarif
-        continue-on-error: true
 
       - name: Upload Snyk result to GitHub Code Scanning
         if: always() && hashFiles('snyk.sarif') != ''
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: snyk.sarif
-        continue-on-error: true
 
   docker-build:
     name: Build Docker Image & Scan Vulnerabilities
@@ -286,14 +274,12 @@ jobs:
           image-ref: ghcr.io/${{ github.repository }}@${{ steps.build.outputs.digest }}
           format: 'sarif'
           output: 'trivy-results.sarif'
-        continue-on-error: true
 
       - name: Upload Trivy scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v3
         if: always() && hashFiles('trivy-results.sarif') != ''
         with:
           sarif_file: 'trivy-results.sarif'
-        continue-on-error: true
 
       - name: Check if Trivy SARIF exists
         run: |
@@ -309,7 +295,6 @@ jobs:
         with:
           name: trivy-sarif
           path: trivy-results.sarif
-        continue-on-error: true
 
       # Save image digest for production promotion
       - name: Save image digest
