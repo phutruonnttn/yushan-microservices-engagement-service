@@ -81,20 +81,19 @@ public class VoteService {
         vote.initializeAsNew();
         voteMapper.insertSelective(vote);
        
-        // Update novel vote count
-        contentServiceClient.incrementVoteCount(novelId);
-        // Get updated vote count
-        ApiResponse<Integer> voteCountResponse = contentServiceClient.getNovelVoteCount(novelId);
-        Integer updatedVoteCount = voteCountResponse != null && voteCountResponse.getData() != null 
-            ? voteCountResponse.getData() : 0;
-
+        // Calculate vote count from local DB (engagement-service is source of truth)
+        Integer voteCount = (int) voteMapper.countByNovelId(novelId);
+        
+        // Publish Kafka event to update vote count in content service
+        kafkaEventProducerService.publishNovelVoteCountUpdateEvent(novelId, voteCount);
+        
         // Publish Kafka event for gamification
         kafkaEventProducerService.publishVoteCreatedEvent(
                 vote.getId(),
                 userId
         );
 
-        return new VoteResponseDTO(novelId, updatedVoteCount, true, remainedYuan);
+        return new VoteResponseDTO(novelId, voteCount, true, remainedYuan);
     }
 
     public PageResponseDTO<VoteUserResponseDTO> getUserVotes(UUID userId, int page, int size) {

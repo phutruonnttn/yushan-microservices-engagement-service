@@ -316,7 +316,7 @@ public class ReviewService {
 
     /**
      * Update novel's average rating and review count
-     * This method calculates the statistics and calls NovelService
+     * This method calculates the statistics and publishes Kafka event
      */
     private void updateNovelRatingAndCount(Integer novelId) {
         // Get all reviews for this novel
@@ -341,8 +341,8 @@ public class ReviewService {
             reviewCount = reviews.size();
         }
         
-        // Call contentServiceClient with calculated values
-        contentServiceClient.updateNovelRatingAndCount(novelId, avgRating, reviewCount);
+        // Publish Kafka event instead of sync API call
+        kafkaEventProducerService.publishNovelRatingUpdateEvent(novelId, avgRating, reviewCount);
     }
 
     /**

@@ -78,9 +78,7 @@ class VoteServiceTest {
         
         ApiResponse<VoteCheckResponseDTO> voteCheckResponse = new ApiResponse<>();
         voteCheckResponse.setData(testVoteCheck);
-        
-        ApiResponse<Integer> voteCountResponse = new ApiResponse<>();
-        voteCountResponse.setData(5);
+        testVoteCheck.setCurrentYuanBalance(10.0);
         
         when(contentServiceClient.getNovelById(testNovelId)).thenReturn(novelResponse);
         when(gamificationServiceClient.checkVoteEligibility()).thenReturn(voteCheckResponse);
@@ -89,8 +87,8 @@ class VoteServiceTest {
             vote.setId(1);
             return 1;
         });
-        when(contentServiceClient.incrementVoteCount(testNovelId)).thenReturn(new ApiResponse<>());
-        when(contentServiceClient.getNovelVoteCount(testNovelId)).thenReturn(voteCountResponse);
+        // Mock countByNovelId to return 5 (including the vote we just inserted)
+        when(voteMapper.countByNovelId(testNovelId)).thenReturn(5L);
 
         // Act
         VoteResponseDTO result = voteService.createVote(testNovelId, testUserId);
@@ -100,13 +98,17 @@ class VoteServiceTest {
         assertEquals(testNovelId, result.getNovelId());
         assertEquals(5, result.getVoteCount());
         assertTrue(result.getIsVoted());
+        assertEquals(9.0f, result.getRemainedYuan()); // 10.0 - 1.0
         
         verify(contentServiceClient).getNovelById(testNovelId);
         verify(gamificationServiceClient).checkVoteEligibility();
         verify(voteMapper).insertSelective(any(Vote.class));
-        verify(contentServiceClient).incrementVoteCount(testNovelId);
-        verify(contentServiceClient).getNovelVoteCount(testNovelId);
+        verify(voteMapper).countByNovelId(testNovelId);
+        verify(kafkaEventProducerService).publishNovelVoteCountUpdateEvent(testNovelId, 5);
         verify(kafkaEventProducerService).publishVoteCreatedEvent(anyInt(), eq(testUserId));
+        // Verify no longer calling sync API
+        verify(contentServiceClient, never()).incrementVoteCount(anyInt());
+        verify(contentServiceClient, never()).getNovelVoteCount(anyInt());
     }
 
     @Test

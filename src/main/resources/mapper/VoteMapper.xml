@@ -97,6 +97,12 @@
         where user_id = #{userId,jdbcType=OTHER}
     </select>
 
+    <select id="countByNovelId" resultType="long">
+        select count(*)
+        from vote
+        where novel_id = #{novelId,jdbcType=INTEGER}
+    </select>
+
     <select id="selectByUserIdWithPagination" resultMap="BaseResultMap">
         select
         <include refid="Base_Column_List" />

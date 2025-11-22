@@ -28,5 +28,7 @@ public interface VoteMapper {
 
     long countByUserId(UUID userId);
 
+    long countByNovelId(@Param("novelId") Integer novelId);
+
     List<Vote> selectByUserIdWithPagination(UUID userId, int offset, int limit);
 }
