@@ -131,4 +131,116 @@ public class Review {
     public void setUpdateTime(Date updateTime) {
         this.updateTime = updateTime != null ? new Date(updateTime.getTime()) : null;
     }
+
+    // ==================== Business Logic Methods ====================
+
+    /**
+     * Initialize as new review with default values
+     */
+    public void initializeAsNew() {
+        if (this.uuid == null) {
+            this.uuid = UUID.randomUUID();
+        }
+        Date now = new Date();
+        if (this.createTime == null) {
+            this.createTime = now;
+        }
+        if (this.updateTime == null) {
+            this.updateTime = now;
+        }
+        if (this.likeCnt == null) {
+            this.likeCnt = 0;
+        }
+        if (this.isSpoiler == null) {
+            this.isSpoiler = false;
+        }
+    }
+
+    /**
+     * Update content and update timestamp
+     */
+    public void updateContent(String content) {
+        this.content = content != null ? content.trim() : null;
+        this.updateTime = new Date();
+    }
+
+    /**
+     * Update title and update timestamp
+     */
+    public void updateTitle(String title) {
+        this.title = title != null ? title.trim() : null;
+        this.updateTime = new Date();
+    }
+
+    /**
+     * Update rating and update timestamp
+     */
+    public void updateRating(Integer rating) {
+        this.rating = rating;
+        this.updateTime = new Date();
+    }
+
+    /**
+     * Increment like count
+     */
+    public void incrementLikeCount() {
+        if (this.likeCnt == null) {
+            this.likeCnt = 0;
+        }
+        this.likeCnt++;
+        this.updateTime = new Date();
+    }
+
+    /**
+     * Decrement like count (with validation)
+     */
+    public void decrementLikeCount() {
+        if (this.likeCnt == null) {
+            this.likeCnt = 0;
+        }
+        if (this.likeCnt > 0) {
+            this.likeCnt--;
+            this.updateTime = new Date();
+        }
+    }
+
+    /**
+     * Mark as spoiler
+     */
+    public void markAsSpoiler() {
+        this.isSpoiler = true;
+        this.updateTime = new Date();
+    }
+
+    /**
+     * Mark as not spoiler
+     */
+    public void markAsNotSpoiler() {
+        this.isSpoiler = false;
+        this.updateTime = new Date();
+    }
+
+    /**
+     * Set spoiler status
+     */
+    public void setSpoilerStatus(Boolean isSpoiler) {
+        this.isSpoiler = isSpoiler != null ? isSpoiler : false;
+        this.updateTime = new Date();
+    }
+
+    /**
+     * Update timestamp
+     */
+    public void updateTimestamp() {
+        this.updateTime = new Date();
+    }
+
+    // ==================== Helper Methods ====================
+
+    /**
+     * Check if review is a spoiler
+     */
+    public boolean isSpoilerReview() {
+        return Boolean.TRUE.equals(this.isSpoiler);
+    }
 }

@@ -65,4 +65,26 @@ public class Vote {
     public void setUpdateTime(Date updateTime) {
         this.updateTime = updateTime != null ? new Date(updateTime.getTime()) : null;
     }
+
+    // ==================== Business Logic Methods ====================
+
+    /**
+     * Initialize as new vote with default values
+     */
+    public void initializeAsNew() {
+        Date now = new Date();
+        if (this.createTime == null) {
+            this.createTime = now;
+        }
+        if (this.updateTime == null) {
+            this.updateTime = now;
+        }
+    }
+
+    /**
+     * Update timestamp
+     */
+    public void updateTimestamp() {
+        this.updateTime = new Date();
+    }
 }

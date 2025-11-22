@@ -1,5 +1,7 @@
 package com.yushan.engagement_service.entity;
 
+import com.yushan.engagement_service.enums.ReportStatus;
+
 import java.util.Date;
 import java.util.UUID;
 
@@ -141,5 +143,113 @@ public class Report {
 
     public void setContentId(Integer contentId) {
         this.contentId = contentId;
+    }
+
+    // ==================== Business Logic Methods ====================
+
+    /**
+     * Initialize as new report with default values
+     */
+    public void initializeAsNew() {
+        if (this.uuid == null) {
+            this.uuid = UUID.randomUUID();
+        }
+        Date now = new Date();
+        if (this.createdAt == null) {
+            this.createdAt = now;
+        }
+        if (this.updatedAt == null) {
+            this.updatedAt = now;
+        }
+        if (this.status == null) {
+            this.status = ReportStatus.IN_REVIEW.name();
+        }
+    }
+
+    /**
+     * Change report status and update timestamp
+     */
+    public void changeStatus(ReportStatus newStatus) {
+        this.status = newStatus != null ? newStatus.name() : null;
+        this.updatedAt = new Date();
+    }
+
+    /**
+     * Mark report as in review
+     */
+    public void markInReview() {
+        changeStatus(ReportStatus.IN_REVIEW);
+    }
+
+    /**
+     * Resolve report with admin notes and resolver UUID
+     */
+    public void resolve(String adminNotes, UUID resolvedBy) {
+        this.status = ReportStatus.RESOLVED.name();
+        this.adminNotes = adminNotes != null ? adminNotes.trim() : null;
+        this.resolvedBy = resolvedBy;
+        this.updatedAt = new Date();
+    }
+
+    /**
+     * Dismiss report with admin notes and resolver UUID
+     */
+    public void dismiss(String adminNotes, UUID resolvedBy) {
+        this.status = ReportStatus.DISMISSED.name();
+        this.adminNotes = adminNotes != null ? adminNotes.trim() : null;
+        this.resolvedBy = resolvedBy;
+        this.updatedAt = new Date();
+    }
+
+    /**
+     * Update admin notes and update timestamp
+     */
+    public void updateAdminNotes(String adminNotes) {
+        this.adminNotes = adminNotes != null ? adminNotes.trim() : null;
+        this.updatedAt = new Date();
+    }
+
+    /**
+     * Update timestamp
+     */
+    public void updateTimestamp() {
+        this.updatedAt = new Date();
+    }
+
+    // ==================== Helper Methods ====================
+
+    /**
+     * Check if report is in review
+     */
+    public boolean isInReview() {
+        return ReportStatus.IN_REVIEW.name().equals(this.status);
+    }
+
+    /**
+     * Check if report is resolved
+     */
+    public boolean isResolved() {
+        return ReportStatus.RESOLVED.name().equals(this.status);
+    }
+
+    /**
+     * Check if report is dismissed
+     */
+    public boolean isDismissed() {
+        return ReportStatus.DISMISSED.name().equals(this.status);
+    }
+
+    /**
+     * Check if report can be resolved
+     */
+    public boolean canBeResolved() {
+        return isInReview();
+    }
+
+    /**
+     * Check if report can be dismissed
+     */
+    public boolean canBeDismissed() {
+        return isInReview();
     }
 }

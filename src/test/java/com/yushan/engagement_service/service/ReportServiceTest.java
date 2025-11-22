@@ -329,7 +329,7 @@ class ReportServiceTest {
     void resolveReport_WithValidData_ShouldResolveReport() {
         // Arrange
         when(reportMapper.selectByPrimaryKey(1)).thenReturn(testReport);
-        when(reportMapper.updateReportStatus(1, "RESOLVED", "Report resolved", testAdminId)).thenReturn(1);
+        when(reportMapper.updateByPrimaryKeySelective(any(Report.class))).thenReturn(1);
         when(userServiceClient.getUsernameById(testReporterId)).thenReturn("testuser");
         when(userServiceClient.getUsernameById(testAdminId)).thenReturn("admin");
         
@@ -344,8 +344,8 @@ class ReportServiceTest {
         assertNotNull(result);
         assertEquals(1, result.getId());
         
-        verify(reportMapper, times(2)).selectByPrimaryKey(1);
-        verify(reportMapper).updateReportStatus(1, "RESOLVED", "Report resolved", testAdminId);
+        verify(reportMapper).selectByPrimaryKey(1);
+        verify(reportMapper).updateByPrimaryKeySelective(any(Report.class));
     }
 
     @Test
@@ -359,7 +359,7 @@ class ReportServiceTest {
         });
         
         verify(reportMapper).selectByPrimaryKey(1);
-        verify(reportMapper, never()).updateReportStatus(anyInt(), anyString(), anyString(), any());
+        verify(reportMapper, never()).updateByPrimaryKeySelective(any(Report.class));
     }
 
     @Test
@@ -374,7 +374,7 @@ class ReportServiceTest {
         });
         
         verify(reportMapper).selectByPrimaryKey(1);
-        verify(reportMapper, never()).updateReportStatus(anyInt(), anyString(), anyString(), any());
+        verify(reportMapper, never()).updateByPrimaryKeySelective(any(Report.class));
     }
 
     @Test
