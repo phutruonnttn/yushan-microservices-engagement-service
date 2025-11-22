@@ -12,7 +12,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -54,11 +53,8 @@ public class CommentService {
         comment.setUserId(userId);
         comment.setChapterId(request.getChapterId());
         comment.setContent(request.getContent().trim());
-        comment.setLikeCnt(0);
-        comment.setIsSpoiler(request.getIsSpoiler() != null ? request.getIsSpoiler() : false);
-        Date now = new Date();
-        comment.setCreateTime(now);
-        comment.setUpdateTime(now);
+        comment.setSpoilerStatus(request.getIsSpoiler());
+        comment.initializeAsNew();
 
         commentMapper.insertSelective(comment);
 
@@ -96,18 +92,17 @@ public class CommentService {
         if (request.getContent() != null && !request.getContent().trim().isEmpty()) {
             String newContent = request.getContent().trim();
             if (!newContent.equals(existingComment.getContent())) {
-                existingComment.setContent(newContent);
+                existingComment.updateContent(newContent);
                 hasChanges = true;
             }
         }
 
         if (request.getIsSpoiler() != null && !request.getIsSpoiler().equals(existingComment.getIsSpoiler())) {
-            existingComment.setIsSpoiler(request.getIsSpoiler());
+            existingComment.setSpoilerStatus(request.getIsSpoiler());
             hasChanges = true;
         }
 
         if (hasChanges) {
-            existingComment.setUpdateTime(new Date());
             commentMapper.updateByPrimaryKeySelective(existingComment);
         }
 
@@ -545,8 +540,7 @@ public class CommentService {
         for (Integer commentId : request.getCommentIds()) {
             Comment comment = commentMapper.selectByPrimaryKey(commentId);
             if (comment != null) {
-                comment.setIsSpoiler(request.getIsSpoiler());
-                comment.setUpdateTime(new Date());
+                comment.setSpoilerStatus(request.getIsSpoiler());
                 int result = commentMapper.updateByPrimaryKeySelective(comment);
                 if (result > 0) {
                     updatedCount++;

@@ -78,9 +78,7 @@ public class VoteService {
         Vote vote = new Vote();
         vote.setUserId(userId);
         vote.setNovelId(novelId);
-        Date now = new Date();
-        vote.setCreateTime(now);
-        vote.setUpdateTime(now);
+        vote.initializeAsNew();
         voteMapper.insertSelective(vote);
        
         // Update novel vote count

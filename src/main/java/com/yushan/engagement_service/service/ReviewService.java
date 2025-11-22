@@ -11,7 +11,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Date;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -59,11 +58,8 @@ public class ReviewService {
         review.setRating(request.getRating());
         review.setTitle(request.getTitle());
         review.setContent(request.getContent());
-        review.setLikeCnt(0);
-        review.setIsSpoiler(request.getIsSpoiler() != null ? request.getIsSpoiler() : false);
-        Date now = new Date();
-        review.setCreateTime(now);
-        review.setUpdateTime(now);
+        review.setSpoilerStatus(request.getIsSpoiler());
+        review.initializeAsNew();
 
         reviewMapper.insertSelective(review);
 
@@ -105,25 +101,24 @@ public class ReviewService {
         boolean ratingChanged = false;
         
         if (request.getRating() != null && !request.getRating().equals(existingReview.getRating())) {
-            existingReview.setRating(request.getRating());
+            existingReview.updateRating(request.getRating());
             hasChanges = true;
             ratingChanged = true;
         }
         if (request.getTitle() != null && !request.getTitle().trim().isEmpty()) {
-            existingReview.setTitle(request.getTitle().trim());
+            existingReview.updateTitle(request.getTitle().trim());
             hasChanges = true;
         }
         if (request.getContent() != null && !request.getContent().trim().isEmpty()) {
-            existingReview.setContent(request.getContent().trim());
+            existingReview.updateContent(request.getContent().trim());
             hasChanges = true;
         }
         if (request.getIsSpoiler() != null && !request.getIsSpoiler().equals(existingReview.getIsSpoiler())) {
-            existingReview.setIsSpoiler(request.getIsSpoiler());
+            existingReview.setSpoilerStatus(request.getIsSpoiler());
             hasChanges = true;
         }
 
         if (hasChanges) {
-            existingReview.setUpdateTime(new Date());
             reviewMapper.updateByPrimaryKeySelective(existingReview);
 
             // Only update novel rating if rating changed

@@ -14,14 +14,12 @@ import com.yushan.engagement_service.dto.report.ReportSearchRequestDTO;
 import com.yushan.engagement_service.entity.Report;
 import com.yushan.engagement_service.entity.Comment;
 import com.yushan.engagement_service.enums.ReportType;
-import com.yushan.engagement_service.enums.ReportStatus;
 import com.yushan.engagement_service.exception.ResourceNotFoundException;
 import com.yushan.engagement_service.exception.ValidationException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Date;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -76,15 +74,12 @@ public class ReportService {
 
         // Create report
         Report report = new Report();
-        report.setUuid(UUID.randomUUID());
         report.setReporterId(reporterId);
         report.setReportType(reportType.name());
         report.setReason(request.getReason());
-        report.setStatus(ReportStatus.IN_REVIEW.name());
         report.setContentType("NOVEL");
         report.setContentId(novelId);
-        report.setCreatedAt(new Date());
-        report.setUpdatedAt(new Date());
+        report.initializeAsNew();
 
         reportMapper.insertSelective(report);
 
@@ -120,15 +115,12 @@ public class ReportService {
 
         // Create report
         Report report = new Report();
-        report.setUuid(UUID.randomUUID());
         report.setReporterId(reporterId);
         report.setReportType(reportType.name());
         report.setReason(request.getReason());
-        report.setStatus(ReportStatus.IN_REVIEW.name());
         report.setContentType("COMMENT");
         report.setContentId(commentId);
-        report.setCreatedAt(new Date());
-        report.setUpdatedAt(new Date());
+        report.initializeAsNew();
 
         reportMapper.insertSelective(report);
 
@@ -176,17 +168,16 @@ public class ReportService {
             throw new ValidationException("Invalid action. Must be RESOLVED or DISMISSED");
         }
 
-        // Update report status
-        reportMapper.updateReportStatus(
-                reportId,
-                request.getAction(),
-                request.getAdminNotes(),
-                adminId
-        );
+        // Update report status using business methods
+        if ("RESOLVED".equals(request.getAction())) {
+            report.resolve(request.getAdminNotes(), adminId);
+        } else {
+            report.dismiss(request.getAdminNotes(), adminId);
+        }
 
-        // Get updated report
-        Report updatedReport = reportMapper.selectByPrimaryKey(reportId);
-        return toReportResponseDTO(updatedReport, null, null);
+        reportMapper.updateByPrimaryKeySelective(report);
+
+        return toReportResponseDTO(report, null, null);
     }
 
     /**
