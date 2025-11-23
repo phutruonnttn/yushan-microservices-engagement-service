@@ -1,6 +1,6 @@
 package com.yushan.engagement_service.service;
 
-import com.yushan.engagement_service.dao.ReviewMapper;
+import com.yushan.engagement_service.repository.ReviewRepository;
 import com.yushan.engagement_service.dto.review.*;
 import com.yushan.engagement_service.dto.common.*;
 import com.yushan.engagement_service.dto.novel.NovelDetailResponseDTO;
@@ -22,7 +22,7 @@ import com.yushan.engagement_service.client.UserServiceClient;
 public class ReviewService {
 
     @Autowired
-    private ReviewMapper reviewMapper;
+    private ReviewRepository reviewRepository;
 
     @Autowired
     private ContentServiceClient contentServiceClient;
@@ -45,7 +45,7 @@ public class ReviewService {
         }
 
         // check if user has already reviewed the novel
-        Review existingReview = reviewMapper.selectByUserAndNovel(userId, request.getNovelId());
+        Review existingReview = reviewRepository.findByUserAndNovel(userId, request.getNovelId());
         if (existingReview != null) {
             throw new IllegalArgumentException("You have already reviewed this novel");
         }
@@ -61,7 +61,7 @@ public class ReviewService {
         review.setSpoilerStatus(request.getIsSpoiler());
         review.initializeAsNew();
 
-        reviewMapper.insertSelective(review);
+        reviewRepository.save(review);
 
         // Update novel rating and review count
         updateNovelRatingAndCount(request.getNovelId());
@@ -86,7 +86,7 @@ public class ReviewService {
      */
     @Transactional
     public ReviewResponseDTO updateReview(Integer reviewId, UUID userId, ReviewUpdateRequestDTO request) {
-        Review existingReview = reviewMapper.selectByPrimaryKey(reviewId);
+        Review existingReview = reviewRepository.findById(reviewId);
         if (existingReview == null) {
             throw new ResourceNotFoundException("Review not found");
         }
@@ -119,7 +119,7 @@ public class ReviewService {
         }
 
         if (hasChanges) {
-            reviewMapper.updateByPrimaryKeySelective(existingReview);
+            reviewRepository.save(existingReview);
 
             // Only update novel rating if rating changed
             if (ratingChanged) {
@@ -136,7 +136,7 @@ public class ReviewService {
      */
     @Transactional
     public boolean deleteReview(Integer reviewId, UUID userId, boolean isAdmin) {
-        Review review = reviewMapper.selectByPrimaryKey(reviewId);
+        Review review = reviewRepository.findById(reviewId);
         if (review == null) {
             throw new ResourceNotFoundException("Review not found");
         }
@@ -147,21 +147,18 @@ public class ReviewService {
         }
 
         Integer novelId = review.getNovelId();
-        int result = reviewMapper.deleteByPrimaryKey(reviewId);
+        reviewRepository.delete(reviewId);
 
-        if (result > 0) {
-            // Update novel rating and review count
-            updateNovelRatingAndCount(novelId);
-            return true;
-        }
-        return false;
+        // Update novel rating and review count
+        updateNovelRatingAndCount(novelId);
+        return true;
     }
 
     /**
      * Get review by ID
      */
     public ReviewResponseDTO getReview(Integer reviewId) {
-        Review review = reviewMapper.selectByPrimaryKey(reviewId);
+        Review review = reviewRepository.findById(reviewId);
         if (review == null) {
             throw new ResourceNotFoundException("Review not found");
         }
@@ -182,8 +179,8 @@ public class ReviewService {
         }
 
         ReviewSearchRequestDTO request = new ReviewSearchRequestDTO(page, size, sort, order, novelId, null, null, null);
-        List<Review> reviews = reviewMapper.selectReviewsWithPagination(request);
-        long totalElements = reviewMapper.countReviews(request);
+        List<Review> reviews = reviewRepository.findReviewsWithPagination(request);
+        long totalElements = reviewRepository.countReviews(request);
 
         List<ReviewResponseDTO> reviewDTOs = reviews.stream()
                 .map(this::toResponseDTO)
@@ -213,8 +210,8 @@ public class ReviewService {
             request.setOrder("desc");
         }
 
-        List<Review> reviews = reviewMapper.selectReviewsWithPagination(request);
-        long totalElements = reviewMapper.countReviews(request);
+        List<Review> reviews = reviewRepository.findReviewsWithPagination(request);
+        long totalElements = reviewRepository.countReviews(request);
 
         List<ReviewResponseDTO> reviewDTOs = reviews.stream()
                 .map(this::toResponseDTO)
@@ -229,19 +226,17 @@ public class ReviewService {
      */
     @Transactional
     public ReviewResponseDTO toggleLike(Integer reviewId, UUID currentUserId, boolean isLiking) {
-        Review review = reviewMapper.selectByPrimaryKey(reviewId);
+        Review review = reviewRepository.findById(reviewId);
         if (review == null) {
             throw new ResourceNotFoundException("Review not found");
         }
 
         // Increment or decrement like count
         int increment = isLiking ? 1 : -1;
-        int result = reviewMapper.updateLikeCount(reviewId, increment);
+        reviewRepository.updateLikeCount(reviewId, increment);
 
-        if (result > 0) {
-            // Fetch updated review
-            review = reviewMapper.selectByPrimaryKey(reviewId);
-        }
+        // Fetch updated review
+        review = reviewRepository.findById(reviewId);
 
         return toResponseDTO(review);
     }
@@ -250,7 +245,7 @@ public class ReviewService {
      * Get user's reviews
      */
     public List<ReviewResponseDTO> getUserReviews(UUID userId) {
-        List<Review> reviews = reviewMapper.selectByUserId(userId);
+        List<Review> reviews = reviewRepository.findByUserId(userId);
         return reviews.stream()
                 .map(this::toResponseDTO)
                 .collect(Collectors.toList());
@@ -260,7 +255,7 @@ public class ReviewService {
      * Check if user has reviewed a novel
      */
     public boolean hasUserReviewedNovel(UUID userId, Integer novelId) {
-        Review review = reviewMapper.selectByUserAndNovel(userId, novelId);
+        Review review = reviewRepository.findByUserAndNovel(userId, novelId);
         return review != null;
     }
 
@@ -268,7 +263,7 @@ public class ReviewService {
      * Get user's review for a specific novel
      */
     public ReviewResponseDTO getUserReviewForNovel(UUID userId, Integer novelId) {
-        Review review = reviewMapper.selectByUserAndNovel(userId, novelId);
+        Review review = reviewRepository.findByUserAndNovel(userId, novelId);
         if (review == null) {
             throw new ResourceNotFoundException("Review not found");
         }
@@ -320,7 +315,7 @@ public class ReviewService {
      */
     private void updateNovelRatingAndCount(Integer novelId) {
         // Get all reviews for this novel
-        List<Review> reviews = reviewMapper.selectByNovelId(novelId);
+        List<Review> reviews = reviewRepository.findByNovelId(novelId);
         
         float avgRating;
         int reviewCount;
@@ -352,7 +347,7 @@ public class ReviewService {
         // Get novel basic info through contentServiceClient
         ApiResponse<NovelDetailResponseDTO> novelDetail = contentServiceClient.getNovelById(novelId);
 
-        List<Review> reviews = reviewMapper.selectByNovelId(novelId);
+        List<Review> reviews = reviewRepository.findByNovelId(novelId);
         
         NovelRatingStatsDTO stats = new NovelRatingStatsDTO();
         stats.setNovelId(novelId);

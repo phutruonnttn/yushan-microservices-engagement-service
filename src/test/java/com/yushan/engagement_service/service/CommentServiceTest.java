@@ -2,7 +2,7 @@ package com.yushan.engagement_service.service;
 
 import com.yushan.engagement_service.client.ContentServiceClient;
 import com.yushan.engagement_service.client.UserServiceClient;
-import com.yushan.engagement_service.dao.CommentMapper;
+import com.yushan.engagement_service.repository.CommentRepository;
 import com.yushan.engagement_service.dto.comment.*;
 import com.yushan.engagement_service.dto.chapter.ChapterDetailResponseDTO;
 import com.yushan.engagement_service.entity.Comment;
@@ -25,7 +25,7 @@ import static org.mockito.Mockito.*;
  */
 public class CommentServiceTest {
 
-    private CommentMapper commentMapper;
+    private CommentRepository commentRepository;
     private ContentServiceClient contentServiceClient;
     private UserServiceClient userServiceClient;
     private KafkaEventProducerService kafkaEventProducerService;
@@ -33,16 +33,16 @@ public class CommentServiceTest {
 
     @BeforeEach
     void setUp() {
-        commentMapper = Mockito.mock(CommentMapper.class);
+        commentRepository = Mockito.mock(CommentRepository.class);
         contentServiceClient = Mockito.mock(ContentServiceClient.class);
         userServiceClient = Mockito.mock(UserServiceClient.class);
         kafkaEventProducerService = Mockito.mock(KafkaEventProducerService.class);
 
         commentService = new CommentService();
         try {
-            java.lang.reflect.Field f1 = CommentService.class.getDeclaredField("commentMapper");
+            java.lang.reflect.Field f1 = CommentService.class.getDeclaredField("commentRepository");
             f1.setAccessible(true);
-            f1.set(commentService, commentMapper);
+            f1.set(commentService, commentRepository);
             
             java.lang.reflect.Field f2 = CommentService.class.getDeclaredField("contentServiceClient");
             f2.setAccessible(true);
@@ -70,11 +70,11 @@ public class CommentServiceTest {
         request.setIsSpoiler(false);
 
         when(contentServiceClient.chapterExists(1)).thenReturn(true);
-        when(commentMapper.existsByUserAndChapter(userId, 1)).thenReturn(false);
-        when(commentMapper.insertSelective(any(Comment.class))).thenAnswer(invocation -> {
+        when(commentRepository.existsByUserAndChapter(userId, 1)).thenReturn(false);
+        when(commentRepository.save(any(Comment.class))).thenAnswer(invocation -> {
             Comment comment = invocation.getArgument(0);
             comment.setId(123); // Set ID after insert
-            return 1;
+            return comment;
         });
 
         // Act
@@ -84,7 +84,7 @@ public class CommentServiceTest {
         assertNotNull(result);
         assertEquals("Test comment", result.getContent());
         assertFalse(result.getIsSpoiler());
-        verify(commentMapper).insertSelective(any(Comment.class));
+        verify(commentRepository).save(any(Comment.class));
         verify(kafkaEventProducerService).publishCommentCreatedEvent(eq(123), eq(userId), eq(1), eq("Test comment"), eq(false));
     }
 
@@ -115,7 +115,7 @@ public class CommentServiceTest {
         request.setIsSpoiler(false);
 
         when(contentServiceClient.chapterExists(1)).thenReturn(true);
-        when(commentMapper.existsByUserAndChapter(userId, 1)).thenReturn(true);
+        when(commentRepository.existsByUserAndChapter(userId, 1)).thenReturn(true);
 
         // Act & Assert
         assertThrows(IllegalArgumentException.class, () -> {
@@ -133,21 +133,21 @@ public class CommentServiceTest {
         request.setIsSpoiler(false);
 
         when(contentServiceClient.chapterExists(1)).thenReturn(true);
-        when(commentMapper.existsByUserAndChapter(userId, 1)).thenReturn(false);
-        when(commentMapper.insertSelective(any(Comment.class))).thenAnswer(invocation -> {
+        when(commentRepository.existsByUserAndChapter(userId, 1)).thenReturn(false);
+        when(commentRepository.save(any(Comment.class))).thenAnswer(invocation -> {
             Comment comment = invocation.getArgument(0);
             comment.setId(123);
-            return 1;
+            return comment;
         });
 
-        when(commentMapper.selectByPrimaryKey(123)).thenReturn(new Comment());
+        when(commentRepository.findById(123)).thenReturn(new Comment());
 
         // Act
         CommentResponseDTO result = commentService.createComment(userId, request);
 
         // Assert
         assertNotNull(result);
-        verify(commentMapper).insertSelective(any(Comment.class));
+        verify(commentRepository).save(any(Comment.class));
     }
 
     @Test
@@ -160,11 +160,11 @@ public class CommentServiceTest {
         request.setIsSpoiler(null); // Null spoiler flag
 
         when(contentServiceClient.chapterExists(1)).thenReturn(true);
-        when(commentMapper.existsByUserAndChapter(userId, 1)).thenReturn(false);
-        when(commentMapper.insertSelective(any(Comment.class))).thenAnswer(invocation -> {
+        when(commentRepository.existsByUserAndChapter(userId, 1)).thenReturn(false);
+        when(commentRepository.save(any(Comment.class))).thenAnswer(invocation -> {
             Comment comment = invocation.getArgument(0);
             comment.setId(123); // Set ID after insert
-            return 1;
+            return comment;
         });
 
         // Act
@@ -173,7 +173,7 @@ public class CommentServiceTest {
         // Assert
         assertNotNull(result);
         assertFalse(result.getIsSpoiler());
-        verify(commentMapper).insertSelective(argThat(comment -> 
+        verify(commentRepository).save(argThat(comment -> 
             !comment.getIsSpoiler() // Should be false by default
         ));
     }
@@ -193,8 +193,8 @@ public class CommentServiceTest {
         request.setContent("Updated content");
         request.setIsSpoiler(true);
 
-        when(commentMapper.selectByPrimaryKey(commentId)).thenReturn(existingComment);
-        when(commentMapper.updateByPrimaryKeySelective(any(Comment.class))).thenReturn(1);
+        when(commentRepository.findById(commentId)).thenReturn(existingComment);
+        when(commentRepository.save(any(Comment.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // Act
         CommentResponseDTO result = commentService.updateComment(commentId, userId, request);
@@ -203,7 +203,7 @@ public class CommentServiceTest {
         assertNotNull(result);
         assertEquals("Updated content", result.getContent());
         assertTrue(result.getIsSpoiler());
-        verify(commentMapper).updateByPrimaryKeySelective(any(Comment.class));
+        verify(commentRepository).save(any(Comment.class));
     }
 
     @Test
@@ -214,7 +214,7 @@ public class CommentServiceTest {
         CommentUpdateRequestDTO request = new CommentUpdateRequestDTO();
         request.setContent("Updated content");
 
-        when(commentMapper.selectByPrimaryKey(commentId)).thenReturn(null);
+        when(commentRepository.findById(commentId)).thenReturn(null);
 
         // Act & Assert
         assertThrows(ResourceNotFoundException.class, () -> {
@@ -236,7 +236,7 @@ public class CommentServiceTest {
         CommentUpdateRequestDTO request = new CommentUpdateRequestDTO();
         request.setContent("Updated content");
 
-        when(commentMapper.selectByPrimaryKey(commentId)).thenReturn(existingComment);
+        when(commentRepository.findById(commentId)).thenReturn(existingComment);
 
         // Act & Assert
         assertThrows(IllegalArgumentException.class, () -> {
@@ -258,7 +258,7 @@ public class CommentServiceTest {
         CommentUpdateRequestDTO request = new CommentUpdateRequestDTO();
         request.setContent("   "); // Empty content
 
-        when(commentMapper.selectByPrimaryKey(commentId)).thenReturn(existingComment);
+        when(commentRepository.findById(commentId)).thenReturn(existingComment);
 
         // Act
         CommentResponseDTO result = commentService.updateComment(commentId, userId, request);
@@ -266,7 +266,7 @@ public class CommentServiceTest {
         // Assert
         assertNotNull(result);
         assertEquals("Original content", result.getContent()); // Should remain unchanged
-        verify(commentMapper, never()).updateByPrimaryKeySelective(any(Comment.class));
+        verify(commentRepository, never()).save(any(Comment.class));
     }
 
     @Test
@@ -283,14 +283,14 @@ public class CommentServiceTest {
         CommentUpdateRequestDTO request = new CommentUpdateRequestDTO();
         request.setContent("Same content"); // Same as existing
 
-        when(commentMapper.selectByPrimaryKey(commentId)).thenReturn(existingComment);
+        when(commentRepository.findById(commentId)).thenReturn(existingComment);
 
         // Act
         CommentResponseDTO result = commentService.updateComment(commentId, userId, request);
 
         // Assert
         assertNotNull(result);
-        verify(commentMapper, never()).updateByPrimaryKeySelective(any(Comment.class));
+        verify(commentRepository, never()).save(any(Comment.class));
     }
 
     @Test
@@ -307,14 +307,14 @@ public class CommentServiceTest {
         CommentUpdateRequestDTO request = new CommentUpdateRequestDTO();
         request.setIsSpoiler(true); // Same as existing
 
-        when(commentMapper.selectByPrimaryKey(commentId)).thenReturn(existingComment);
+        when(commentRepository.findById(commentId)).thenReturn(existingComment);
 
         // Act
         CommentResponseDTO result = commentService.updateComment(commentId, userId, request);
 
         // Assert
         assertNotNull(result);
-        verify(commentMapper, never()).updateByPrimaryKeySelective(any(Comment.class));
+        verify(commentRepository, never()).save(any(Comment.class));
     }
 
     @Test
@@ -326,15 +326,15 @@ public class CommentServiceTest {
         existingComment.setId(commentId);
         existingComment.setUserId(userId);
 
-        when(commentMapper.selectByPrimaryKey(commentId)).thenReturn(existingComment);
-        when(commentMapper.deleteByPrimaryKey(commentId)).thenReturn(1);
+        when(commentRepository.findById(commentId)).thenReturn(existingComment);
+        // delete method returns void, no need to mock return value
 
         // Act
         boolean result = commentService.deleteComment(commentId, userId, false);
 
         // Assert
         assertTrue(result);
-        verify(commentMapper).deleteByPrimaryKey(commentId);
+        verify(commentRepository).delete(commentId);
     }
 
     @Test
@@ -343,7 +343,7 @@ public class CommentServiceTest {
         Integer commentId = 999;
         UUID userId = UUID.randomUUID();
 
-        when(commentMapper.selectByPrimaryKey(commentId)).thenReturn(null);
+        when(commentRepository.findById(commentId)).thenReturn(null);
 
         // Act & Assert
         assertThrows(ResourceNotFoundException.class, () -> {
@@ -362,7 +362,7 @@ public class CommentServiceTest {
         existingComment.setId(commentId);
         existingComment.setUserId(otherUserId); // Different user
 
-        when(commentMapper.selectByPrimaryKey(commentId)).thenReturn(existingComment);
+        when(commentRepository.findById(commentId)).thenReturn(existingComment);
 
         // Act & Assert
         assertThrows(IllegalArgumentException.class, () -> {
@@ -381,15 +381,15 @@ public class CommentServiceTest {
         existingComment.setId(commentId);
         existingComment.setUserId(otherUserId); // Different user
 
-        when(commentMapper.selectByPrimaryKey(commentId)).thenReturn(existingComment);
-        when(commentMapper.deleteByPrimaryKey(commentId)).thenReturn(1);
+        when(commentRepository.findById(commentId)).thenReturn(existingComment);
+        // delete method returns void, no need to mock return value
 
         // Act
         boolean result = commentService.deleteComment(commentId, userId, true); // Admin = true
 
         // Assert
         assertTrue(result);
-        verify(commentMapper).deleteByPrimaryKey(commentId);
+        verify(commentRepository).delete(commentId);
     }
 
     @Test
@@ -401,7 +401,7 @@ public class CommentServiceTest {
             createTestComment(2, userId, "Comment 2")
         );
 
-        when(commentMapper.selectByUserId(userId)).thenReturn(comments);
+        when(commentRepository.findByUserId(userId)).thenReturn(comments);
 
         // Act
         List<CommentResponseDTO> result = commentService.getUserComments(userId);
@@ -417,7 +417,7 @@ public class CommentServiceTest {
     void getUserComments_WithEmptyList_ShouldReturnEmptyList() {
         // Arrange
         UUID userId = UUID.randomUUID();
-        when(commentMapper.selectByUserId(userId)).thenReturn(new ArrayList<>());
+        when(commentRepository.findByUserId(userId)).thenReturn(new ArrayList<>());
 
         // Act
         List<CommentResponseDTO> result = commentService.getUserComments(userId);
@@ -431,7 +431,7 @@ public class CommentServiceTest {
     void getUserComments_WithNullList_ShouldReturnEmptyList() {
         // Arrange
         UUID userId = UUID.randomUUID();
-        when(commentMapper.selectByUserId(userId)).thenReturn(new ArrayList<>()); // Return empty list instead of null
+        when(commentRepository.findByUserId(userId)).thenReturn(new ArrayList<>()); // Return empty list instead of null
 
         // Act
         List<CommentResponseDTO> result = commentService.getUserComments(userId);
@@ -463,24 +463,22 @@ public class CommentServiceTest {
         comment3.setUserId(UUID.randomUUID());
         comment3.setContent("Comment 3");
 
-        when(commentMapper.selectByPrimaryKey(1)).thenReturn(comment1);
-        when(commentMapper.selectByPrimaryKey(2)).thenReturn(comment2);
-        when(commentMapper.selectByPrimaryKey(3)).thenReturn(comment3);
-        when(commentMapper.deleteByPrimaryKey(1)).thenReturn(1);
-        when(commentMapper.deleteByPrimaryKey(2)).thenReturn(1);
-        when(commentMapper.deleteByPrimaryKey(3)).thenReturn(1);
+        when(commentRepository.findById(1)).thenReturn(comment1);
+        when(commentRepository.findById(2)).thenReturn(comment2);
+        when(commentRepository.findById(3)).thenReturn(comment3);
+        // delete method returns void, no need to mock return value
 
         // Act
         int result = commentService.batchDeleteComments(request, isAdmin);
 
         // Assert
         assertEquals(3, result);
-        verify(commentMapper).selectByPrimaryKey(1);
-        verify(commentMapper).selectByPrimaryKey(2);
-        verify(commentMapper).selectByPrimaryKey(3);
-        verify(commentMapper).deleteByPrimaryKey(1);
-        verify(commentMapper).deleteByPrimaryKey(2);
-        verify(commentMapper).deleteByPrimaryKey(3);
+        verify(commentRepository).findById(1);
+        verify(commentRepository).findById(2);
+        verify(commentRepository).findById(3);
+        verify(commentRepository).delete(1);
+        verify(commentRepository).delete(2);
+        verify(commentRepository).delete(3);
     }
 
     @Test
@@ -492,8 +490,8 @@ public class CommentServiceTest {
 
         // Act & Assert
         assertThrows(IllegalArgumentException.class, () -> commentService.batchDeleteComments(request, isAdmin));
-        verify(commentMapper, never()).selectByPrimaryKey(anyInt());
-        verify(commentMapper, never()).deleteByPrimaryKey(anyInt());
+        verify(commentRepository, never()).findById(anyInt());
+        verify(commentRepository, never()).delete(anyInt());
     }
 
     @Test
@@ -505,8 +503,8 @@ public class CommentServiceTest {
 
         // Act & Assert
         assertThrows(IllegalArgumentException.class, () -> commentService.batchDeleteComments(request, isAdmin));
-        verify(commentMapper, never()).selectByPrimaryKey(anyInt());
-        verify(commentMapper, never()).deleteByPrimaryKey(anyInt());
+        verify(commentRepository, never()).findById(anyInt());
+        verify(commentRepository, never()).delete(anyInt());
     }
 
     @Test
@@ -520,15 +518,16 @@ public class CommentServiceTest {
         comment.setId(commentId);
         comment.setLikeCnt(5);
 
-        when(commentMapper.selectByPrimaryKey(commentId)).thenReturn(comment);
-        when(commentMapper.updateLikeCount(commentId, 1)).thenReturn(1);
+        when(commentRepository.findById(commentId)).thenReturn(comment);
+        doNothing().when(commentRepository).updateLikeCount(commentId, 1);
+        when(commentRepository.findById(commentId)).thenReturn(comment);
 
         // Act
         CommentResponseDTO result = commentService.toggleLike(commentId, userId, isLiking);
 
         // Assert
         assertNotNull(result);
-        verify(commentMapper).updateLikeCount(commentId, 1);
+        verify(commentRepository).updateLikeCount(commentId, 1);
     }
 
     @Test
@@ -538,7 +537,7 @@ public class CommentServiceTest {
         UUID userId = UUID.randomUUID();
         boolean isLiking = true;
 
-        when(commentMapper.selectByPrimaryKey(commentId)).thenReturn(null);
+        when(commentRepository.findById(commentId)).thenReturn(null);
 
         // Act & Assert
         assertThrows(ResourceNotFoundException.class, () -> {
@@ -552,14 +551,14 @@ public class CommentServiceTest {
         UUID userId = UUID.randomUUID();
         Integer chapterId = 1;
 
-        when(commentMapper.existsByUserAndChapter(userId, chapterId)).thenReturn(true);
+        when(commentRepository.existsByUserAndChapter(userId, chapterId)).thenReturn(true);
 
         // Act
         boolean result = commentService.hasUserCommentedOnChapter(userId, chapterId);
 
         // Assert
         assertTrue(result);
-        verify(commentMapper).existsByUserAndChapter(userId, chapterId);
+        verify(commentRepository).existsByUserAndChapter(userId, chapterId);
     }
 
     @Test
@@ -568,14 +567,14 @@ public class CommentServiceTest {
         UUID userId = UUID.randomUUID();
         Integer chapterId = 1;
 
-        when(commentMapper.existsByUserAndChapter(userId, chapterId)).thenReturn(false);
+        when(commentRepository.existsByUserAndChapter(userId, chapterId)).thenReturn(false);
 
         // Act
         boolean result = commentService.hasUserCommentedOnChapter(userId, chapterId);
 
         // Assert
         assertFalse(result);
-        verify(commentMapper).existsByUserAndChapter(userId, chapterId);
+        verify(commentRepository).existsByUserAndChapter(userId, chapterId);
     }
 
     @Test
@@ -592,7 +591,7 @@ public class CommentServiceTest {
 
         when(contentServiceClient.chapterExists(chapterId)).thenReturn(true);
         when(contentServiceClient.getChapter(chapterId)).thenReturn(chapter);
-        when(commentMapper.selectByChapterId(chapterId)).thenReturn(comments);
+        when(commentRepository.findByChapterId(chapterId)).thenReturn(comments);
 
         // Act
         CommentStatisticsDTO result = commentService.getChapterCommentStats(chapterId);
@@ -602,7 +601,7 @@ public class CommentServiceTest {
         assertEquals(2, result.getTotalComments());
         verify(contentServiceClient).chapterExists(chapterId);
         verify(contentServiceClient).getChapter(chapterId);
-        verify(commentMapper).selectByChapterId(chapterId);
+        verify(commentRepository).findByChapterId(chapterId);
     }
 
     @Test
@@ -615,7 +614,7 @@ public class CommentServiceTest {
 
         when(contentServiceClient.chapterExists(chapterId)).thenReturn(true);
         when(contentServiceClient.getChapter(chapterId)).thenReturn(chapter);
-        when(commentMapper.selectByChapterId(chapterId)).thenReturn(new ArrayList<>());
+        when(commentRepository.findByChapterId(chapterId)).thenReturn(new ArrayList<>());
 
         // Act
         CommentStatisticsDTO result = commentService.getChapterCommentStats(chapterId);
@@ -625,7 +624,7 @@ public class CommentServiceTest {
         assertEquals(0, result.getTotalComments());
         verify(contentServiceClient).chapterExists(chapterId);
         verify(contentServiceClient).getChapter(chapterId);
-        verify(commentMapper).selectByChapterId(chapterId);
+        verify(commentRepository).findByChapterId(chapterId);
     }
 
     @Test
@@ -639,8 +638,8 @@ public class CommentServiceTest {
         String order = "desc";
 
         when(contentServiceClient.chapterExists(chapterId)).thenReturn(true);
-        when(commentMapper.selectCommentsWithPagination(any(CommentSearchRequestDTO.class))).thenReturn(new ArrayList<>());
-        when(commentMapper.countComments(any(CommentSearchRequestDTO.class))).thenReturn(0L);
+        when(commentRepository.findCommentsWithPagination(any(CommentSearchRequestDTO.class))).thenReturn(new ArrayList<>());
+        when(commentRepository.countComments(any(CommentSearchRequestDTO.class))).thenReturn(0L);
 
         // Act
         CommentListResponseDTO result = commentService.getCommentsByChapter(chapterId, currentUserId, page, size, sort, order);
@@ -650,8 +649,8 @@ public class CommentServiceTest {
         assertTrue(result.getComments().isEmpty());
         assertEquals(0, result.getTotalCount());
         verify(contentServiceClient).chapterExists(chapterId);
-        verify(commentMapper).selectCommentsWithPagination(any(CommentSearchRequestDTO.class));
-        verify(commentMapper).countComments(any(CommentSearchRequestDTO.class));
+        verify(commentRepository).findCommentsWithPagination(any(CommentSearchRequestDTO.class));
+        verify(commentRepository).countComments(any(CommentSearchRequestDTO.class));
     }
 
     @Test

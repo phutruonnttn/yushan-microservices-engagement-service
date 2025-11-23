@@ -1,6 +1,6 @@
 package com.yushan.engagement_service.service;
 
-import com.yushan.engagement_service.dao.VoteMapper;
+import com.yushan.engagement_service.repository.VoteRepository;
 import com.yushan.engagement_service.dto.common.PageResponseDTO;
 import com.yushan.engagement_service.dto.common.ApiResponse;
 import com.yushan.engagement_service.dto.vote.VoteResponseDTO;
@@ -25,7 +25,7 @@ import java.util.UUID;
 public class VoteService {
 
     @Autowired
-    private VoteMapper voteMapper;
+    private VoteRepository voteRepository;
 
     @Autowired
     private ContentServiceClient contentServiceClient;
@@ -79,10 +79,10 @@ public class VoteService {
         vote.setUserId(userId);
         vote.setNovelId(novelId);
         vote.initializeAsNew();
-        voteMapper.insertSelective(vote);
+        voteRepository.save(vote);
        
         // Calculate vote count from local DB (engagement-service is source of truth)
-        Integer voteCount = (int) voteMapper.countByNovelId(novelId);
+        Integer voteCount = (int) voteRepository.countByNovelId(novelId);
         
         // Publish Kafka event to update vote count in content service
         kafkaEventProducerService.publishNovelVoteCountUpdateEvent(novelId, voteCount);
@@ -98,13 +98,13 @@ public class VoteService {
 
     public PageResponseDTO<VoteUserResponseDTO> getUserVotes(UUID userId, int page, int size) {
         int offset = page * size;
-        long totalElements = voteMapper.countByUserId(userId);
+        long totalElements = voteRepository.countByUserId(userId);
 
         if (totalElements == 0) {
             return new PageResponseDTO<>(Collections.emptyList(), 0L, page, size);
         }
 
-        List<Vote> votes = voteMapper.selectByUserIdWithPagination(userId, offset, size);
+        List<Vote> votes = voteRepository.findByUserIdWithPagination(userId, offset, size);
         if (votes.isEmpty()) {
             return new PageResponseDTO<>(Collections.emptyList(), totalElements, page, size);
         }
