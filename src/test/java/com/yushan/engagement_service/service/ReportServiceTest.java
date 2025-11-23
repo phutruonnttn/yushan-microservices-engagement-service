@@ -2,8 +2,8 @@ package com.yushan.engagement_service.service;
 
 import com.yushan.engagement_service.client.ContentServiceClient;
 import com.yushan.engagement_service.client.UserServiceClient;
-import com.yushan.engagement_service.dao.CommentMapper;
-import com.yushan.engagement_service.dao.ReportMapper;
+import com.yushan.engagement_service.repository.CommentRepository;
+import com.yushan.engagement_service.repository.ReportRepository;
 import com.yushan.engagement_service.dto.common.ApiResponse;
 import com.yushan.engagement_service.dto.common.PageResponseDTO;
 import com.yushan.engagement_service.dto.novel.NovelDetailResponseDTO;
@@ -37,7 +37,7 @@ import static org.mockito.Mockito.*;
 class ReportServiceTest {
 
     @Mock
-    private ReportMapper reportMapper;
+    private ReportRepository reportRepository;
 
     @Mock
     private ContentServiceClient contentServiceClient;
@@ -46,7 +46,7 @@ class ReportServiceTest {
     private UserServiceClient userServiceClient;
 
     @Mock
-    private CommentMapper commentMapper;
+    private CommentRepository commentRepository;
 
     @InjectMocks
     private ReportService reportService;
@@ -106,11 +106,11 @@ class ReportServiceTest {
         novelResponse.setData(testNovel);
         
         when(contentServiceClient.getNovelById(testNovelId)).thenReturn(novelResponse);
-        when(reportMapper.existsReportByUserAndContent(testReporterId, "NOVEL", testNovelId)).thenReturn(false);
-        when(reportMapper.insertSelective(any(Report.class))).thenAnswer(invocation -> {
+        when(reportRepository.existsReportByUserAndContent(testReporterId, "NOVEL", testNovelId)).thenReturn(false);
+        when(reportRepository.save(any(Report.class))).thenAnswer(invocation -> {
             Report report = invocation.getArgument(0);
             report.setId(1);
-            return 1;
+            return report;
         });
         when(userServiceClient.getUsernameById(testReporterId)).thenReturn("testuser");
 
@@ -128,8 +128,8 @@ class ReportServiceTest {
         assertEquals("testuser", result.getReporterUsername());
         
         verify(contentServiceClient).getNovelById(testNovelId);
-        verify(reportMapper).existsReportByUserAndContent(testReporterId, "NOVEL", testNovelId);
-        verify(reportMapper).insertSelective(any(Report.class));
+        verify(reportRepository).existsReportByUserAndContent(testReporterId, "NOVEL", testNovelId);
+        verify(reportRepository).save(any(Report.class));
     }
 
     @Test
@@ -143,7 +143,7 @@ class ReportServiceTest {
         });
         
         verify(contentServiceClient).getNovelById(testNovelId);
-        verify(reportMapper, never()).insertSelective(any(Report.class));
+        verify(reportRepository, never()).save(any(Report.class));
     }
 
     @Test
@@ -161,7 +161,7 @@ class ReportServiceTest {
         });
         
         verify(contentServiceClient).getNovelById(testNovelId);
-        verify(reportMapper, never()).insertSelective(any(Report.class));
+        verify(reportRepository, never()).save(any(Report.class));
     }
 
     @Test
@@ -180,7 +180,7 @@ class ReportServiceTest {
         });
         
         verify(contentServiceClient).getNovelById(testNovelId);
-        verify(reportMapper, never()).insertSelective(any(Report.class));
+        verify(reportRepository, never()).save(any(Report.class));
     }
 
     @Test
@@ -190,7 +190,7 @@ class ReportServiceTest {
         novelResponse.setData(testNovel);
         
         when(contentServiceClient.getNovelById(testNovelId)).thenReturn(novelResponse);
-        when(reportMapper.existsReportByUserAndContent(testReporterId, "NOVEL", testNovelId)).thenReturn(true);
+        when(reportRepository.existsReportByUserAndContent(testReporterId, "NOVEL", testNovelId)).thenReturn(true);
 
         // Act & Assert
         assertThrows(ValidationException.class, () -> {
@@ -198,19 +198,19 @@ class ReportServiceTest {
         });
         
         verify(contentServiceClient).getNovelById(testNovelId);
-        verify(reportMapper).existsReportByUserAndContent(testReporterId, "NOVEL", testNovelId);
-        verify(reportMapper, never()).insertSelective(any(Report.class));
+        verify(reportRepository).existsReportByUserAndContent(testReporterId, "NOVEL", testNovelId);
+        verify(reportRepository, never()).save(any(Report.class));
     }
 
     @Test
     void createCommentReport_WithValidData_ShouldCreateReport() {
         // Arrange
-        when(commentMapper.selectByPrimaryKey(testCommentId)).thenReturn(testComment);
-        when(reportMapper.existsReportByUserAndContent(testReporterId, "COMMENT", testCommentId)).thenReturn(false);
-        when(reportMapper.insertSelective(any(Report.class))).thenAnswer(invocation -> {
+        when(commentRepository.findById(testCommentId)).thenReturn(testComment);
+        when(reportRepository.existsReportByUserAndContent(testReporterId, "COMMENT", testCommentId)).thenReturn(false);
+        when(reportRepository.save(any(Report.class))).thenAnswer(invocation -> {
             Report report = invocation.getArgument(0);
             report.setId(1);
-            return 1;
+            return report;
         });
         when(userServiceClient.getUsernameById(testReporterId)).thenReturn("testuser");
 
@@ -227,38 +227,38 @@ class ReportServiceTest {
         assertEquals(testCommentId, result.getContentId());
         assertEquals("testuser", result.getReporterUsername());
         
-        verify(commentMapper).selectByPrimaryKey(testCommentId);
-        verify(reportMapper).existsReportByUserAndContent(testReporterId, "COMMENT", testCommentId);
-        verify(reportMapper).insertSelective(any(Report.class));
+        verify(commentRepository).findById(testCommentId);
+        verify(reportRepository).existsReportByUserAndContent(testReporterId, "COMMENT", testCommentId);
+        verify(reportRepository).save(any(Report.class));
     }
 
     @Test
     void createCommentReport_WithNonExistentComment_ShouldThrowException() {
         // Arrange
-        when(commentMapper.selectByPrimaryKey(testCommentId)).thenReturn(null);
+        when(commentRepository.findById(testCommentId)).thenReturn(null);
 
         // Act & Assert
         assertThrows(ResourceNotFoundException.class, () -> {
             reportService.createCommentReport(testReporterId, testCommentId, testCreateRequest);
         });
         
-        verify(commentMapper).selectByPrimaryKey(testCommentId);
-        verify(reportMapper, never()).insertSelective(any(Report.class));
+        verify(commentRepository).findById(testCommentId);
+        verify(reportRepository, never()).save(any(Report.class));
     }
 
     @Test
     void createCommentReport_WithUserReportingOwnComment_ShouldThrowException() {
         // Arrange
         testComment.setUserId(testReporterId); // Same as testReporterId
-        when(commentMapper.selectByPrimaryKey(testCommentId)).thenReturn(testComment);
+        when(commentRepository.findById(testCommentId)).thenReturn(testComment);
 
         // Act & Assert
         assertThrows(ValidationException.class, () -> {
             reportService.createCommentReport(testReporterId, testCommentId, testCreateRequest);
         });
         
-        verify(commentMapper).selectByPrimaryKey(testCommentId);
-        verify(reportMapper, never()).insertSelective(any(Report.class));
+        verify(commentRepository).findById(testCommentId);
+        verify(reportRepository, never()).save(any(Report.class));
     }
 
     @Test
@@ -268,8 +268,8 @@ class ReportServiceTest {
         request.setPage(0);
         request.setSize(10);
         
-        when(reportMapper.selectReportsWithPagination(request)).thenReturn(Arrays.asList(testReport));
-        when(reportMapper.countReports(request)).thenReturn(1L);
+        when(reportRepository.findReportsWithPagination(request)).thenReturn(Arrays.asList(testReport));
+        when(reportRepository.countReports(request)).thenReturn(1L);
         when(userServiceClient.getUsernameById(testReporterId)).thenReturn("testuser");
         
         ApiResponse<NovelDetailResponseDTO> novelResponse = new ApiResponse<>();
@@ -286,14 +286,14 @@ class ReportServiceTest {
         assertEquals(0, result.getCurrentPage());
         assertEquals(10, result.getSize());
         
-        verify(reportMapper).selectReportsWithPagination(request);
-        verify(reportMapper).countReports(request);
+        verify(reportRepository).findReportsWithPagination(request);
+        verify(reportRepository).countReports(request);
     }
 
     @Test
     void getReportById_WithValidId_ShouldReturnReport() {
         // Arrange
-        when(reportMapper.selectByPrimaryKey(1)).thenReturn(testReport);
+        when(reportRepository.findById(1)).thenReturn(testReport);
         when(userServiceClient.getUsernameById(testReporterId)).thenReturn("testuser");
         
         ApiResponse<NovelDetailResponseDTO> novelResponse = new ApiResponse<>();
@@ -309,27 +309,27 @@ class ReportServiceTest {
         assertEquals(testReporterId, result.getReporterId());
         assertEquals("testuser", result.getReporterUsername());
         
-        verify(reportMapper).selectByPrimaryKey(1);
+        verify(reportRepository).findById(1);
     }
 
     @Test
     void getReportById_WithNonExistentId_ShouldThrowException() {
         // Arrange
-        when(reportMapper.selectByPrimaryKey(1)).thenReturn(null);
+        when(reportRepository.findById(1)).thenReturn(null);
 
         // Act & Assert
         assertThrows(ResourceNotFoundException.class, () -> {
             reportService.getReportById(1);
         });
         
-        verify(reportMapper).selectByPrimaryKey(1);
+        verify(reportRepository).findById(1);
     }
 
     @Test
     void resolveReport_WithValidData_ShouldResolveReport() {
         // Arrange
-        when(reportMapper.selectByPrimaryKey(1)).thenReturn(testReport);
-        when(reportMapper.updateByPrimaryKeySelective(any(Report.class))).thenReturn(1);
+        when(reportRepository.findById(1)).thenReturn(testReport);
+        // save method returns Report, not int
         when(userServiceClient.getUsernameById(testReporterId)).thenReturn("testuser");
         when(userServiceClient.getUsernameById(testAdminId)).thenReturn("admin");
         
@@ -344,43 +344,43 @@ class ReportServiceTest {
         assertNotNull(result);
         assertEquals(1, result.getId());
         
-        verify(reportMapper).selectByPrimaryKey(1);
-        verify(reportMapper).updateByPrimaryKeySelective(any(Report.class));
+        verify(reportRepository).findById(1);
+        verify(reportRepository).save(any(Report.class));
     }
 
     @Test
     void resolveReport_WithNonExistentReport_ShouldThrowException() {
         // Arrange
-        when(reportMapper.selectByPrimaryKey(1)).thenReturn(null);
+        when(reportRepository.findById(1)).thenReturn(null);
 
         // Act & Assert
         assertThrows(ResourceNotFoundException.class, () -> {
             reportService.resolveReport(1, testAdminId, testResolutionRequest);
         });
         
-        verify(reportMapper).selectByPrimaryKey(1);
-        verify(reportMapper, never()).updateByPrimaryKeySelective(any(Report.class));
+        verify(reportRepository).findById(1);
+        verify(reportRepository, never()).save(any(Report.class));
     }
 
     @Test
     void resolveReport_WithInvalidAction_ShouldThrowException() {
         // Arrange
         testResolutionRequest.setAction("INVALID_ACTION");
-        when(reportMapper.selectByPrimaryKey(1)).thenReturn(testReport);
+        when(reportRepository.findById(1)).thenReturn(testReport);
 
         // Act & Assert
         assertThrows(ValidationException.class, () -> {
             reportService.resolveReport(1, testAdminId, testResolutionRequest);
         });
         
-        verify(reportMapper).selectByPrimaryKey(1);
-        verify(reportMapper, never()).updateByPrimaryKeySelective(any(Report.class));
+        verify(reportRepository).findById(1);
+        verify(reportRepository, never()).save(any(Report.class));
     }
 
     @Test
     void getReportsByReporter_WithValidData_ShouldReturnReports() {
         // Arrange
-        when(reportMapper.selectReportsByReporterId(testReporterId)).thenReturn(Arrays.asList(testReport));
+        when(reportRepository.findReportsByReporterId(testReporterId)).thenReturn(Arrays.asList(testReport));
         when(userServiceClient.getUsernameById(testReporterId)).thenReturn("testuser");
         
         ApiResponse<NovelDetailResponseDTO> novelResponse = new ApiResponse<>();
@@ -396,13 +396,13 @@ class ReportServiceTest {
         assertEquals(1, result.get(0).getId());
         assertEquals(testReporterId, result.get(0).getReporterId());
         
-        verify(reportMapper).selectReportsByReporterId(testReporterId);
+        verify(reportRepository).findReportsByReporterId(testReporterId);
     }
 
     @Test
     void getReportsByReporter_WithNoReports_ShouldReturnEmptyList() {
         // Arrange
-        when(reportMapper.selectReportsByReporterId(testReporterId)).thenReturn(Collections.emptyList());
+        when(reportRepository.findReportsByReporterId(testReporterId)).thenReturn(Collections.emptyList());
 
         // Act
         List<ReportResponseDTO> result = reportService.getReportsByReporter(testReporterId);
@@ -411,6 +411,6 @@ class ReportServiceTest {
         assertNotNull(result);
         assertTrue(result.isEmpty());
         
-        verify(reportMapper).selectReportsByReporterId(testReporterId);
+        verify(reportRepository).findReportsByReporterId(testReporterId);
     }
 }

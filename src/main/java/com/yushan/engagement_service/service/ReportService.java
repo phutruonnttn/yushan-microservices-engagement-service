@@ -2,8 +2,8 @@ package com.yushan.engagement_service.service;
 
 import com.yushan.engagement_service.client.ContentServiceClient;
 import com.yushan.engagement_service.client.UserServiceClient;
-import com.yushan.engagement_service.dao.ReportMapper;
-import com.yushan.engagement_service.dao.CommentMapper;
+import com.yushan.engagement_service.repository.ReportRepository;
+import com.yushan.engagement_service.repository.CommentRepository;
 import com.yushan.engagement_service.dto.common.ApiResponse;
 import com.yushan.engagement_service.dto.common.PageResponseDTO;
 import com.yushan.engagement_service.dto.novel.NovelDetailResponseDTO;
@@ -28,7 +28,7 @@ import java.util.stream.Collectors;
 public class ReportService {
 
     @Autowired
-    private ReportMapper reportMapper;
+    private ReportRepository reportRepository;
 
     @Autowired
     private ContentServiceClient contentServiceClient;
@@ -37,7 +37,7 @@ public class ReportService {
     private UserServiceClient userServiceClient;
 
     @Autowired
-    private CommentMapper commentMapper;
+    private CommentRepository commentRepository;
 
     /**
      * Create a report for a novel
@@ -68,7 +68,7 @@ public class ReportService {
         }
 
         // Check if user already reported this novel
-        if (reportMapper.existsReportByUserAndContent(reporterId, "NOVEL", novelId)) {
+        if (reportRepository.existsReportByUserAndContent(reporterId, "NOVEL", novelId)) {
             throw new ValidationException("You have already reported this novel");
         }
 
@@ -81,7 +81,7 @@ public class ReportService {
         report.setContentId(novelId);
         report.initializeAsNew();
 
-        reportMapper.insertSelective(report);
+        reportRepository.save(report);
 
         return toReportResponseDTO(report, novel, null);
     }
@@ -92,7 +92,7 @@ public class ReportService {
     @Transactional
     public ReportResponseDTO createCommentReport(UUID reporterId, Integer commentId, ReportCreateRequestDTO request) {
         // Validate comment exists
-        Comment comment = commentMapper.selectByPrimaryKey(commentId);
+        Comment comment = commentRepository.findById(commentId);
         if (comment == null) {
             throw new ResourceNotFoundException("Comment not found");
         }
@@ -109,7 +109,7 @@ public class ReportService {
         }
 
         // Check if user already reported this comment
-        if (reportMapper.existsReportByUserAndContent(reporterId, "COMMENT", commentId)) {
+        if (reportRepository.existsReportByUserAndContent(reporterId, "COMMENT", commentId)) {
             throw new ValidationException("You have already reported this comment");
         }
 
@@ -122,7 +122,7 @@ public class ReportService {
         report.setContentId(commentId);
         report.initializeAsNew();
 
-        reportMapper.insertSelective(report);
+        reportRepository.save(report);
 
         return toReportResponseDTO(report, null, comment);
     }
@@ -131,8 +131,8 @@ public class ReportService {
      * Get reports for admin dashboard with pagination and filtering
      */
     public PageResponseDTO<ReportResponseDTO> getReportsForAdmin(ReportSearchRequestDTO request) {
-        List<Report> reports = reportMapper.selectReportsWithPagination(request);
-        long totalElements = reportMapper.countReports(request);
+        List<Report> reports = reportRepository.findReportsWithPagination(request);
+        long totalElements = reportRepository.countReports(request);
 
         List<ReportResponseDTO> reportDTOs = reports.stream()
                 .map(this::toReportResponseDTO)
@@ -145,7 +145,7 @@ public class ReportService {
      * Get report details by ID
      */
     public ReportResponseDTO getReportById(Integer reportId) {
-        Report report = reportMapper.selectByPrimaryKey(reportId);
+        Report report = reportRepository.findById(reportId);
         if (report == null) {
             throw new ResourceNotFoundException("Report not found");
         }
@@ -158,7 +158,7 @@ public class ReportService {
      */
     @Transactional
     public ReportResponseDTO resolveReport(Integer reportId, UUID adminId, ReportResolutionRequestDTO request) {
-        Report report = reportMapper.selectByPrimaryKey(reportId);
+        Report report = reportRepository.findById(reportId);
         if (report == null) {
             throw new ResourceNotFoundException("Report not found");
         }
@@ -175,7 +175,7 @@ public class ReportService {
             report.dismiss(request.getAdminNotes(), adminId);
         }
 
-        reportMapper.updateByPrimaryKeySelective(report);
+        reportRepository.save(report);
 
         return toReportResponseDTO(report, null, null);
     }
@@ -184,7 +184,7 @@ public class ReportService {
      * Get reports by reporter ID
      */
     public List<ReportResponseDTO> getReportsByReporter(UUID reporterId) {
-        List<Report> reports = reportMapper.selectReportsByReporterId(reporterId);
+        List<Report> reports = reportRepository.findReportsByReporterId(reporterId);
         return reports.stream()
                 .map(report -> toReportResponseDTO(report, null, null))
                 .collect(Collectors.toList());
@@ -256,7 +256,7 @@ public class ReportService {
             dto.setCommentContent(comment.getContent());
         } else if ("COMMENT".equals(report.getContentType())) {
             // If comment is not passed but content type is COMMENT, fetch it
-            Comment relatedComment = commentMapper.selectByPrimaryKey(report.getContentId());
+            Comment relatedComment = commentRepository.findById(report.getContentId());
             if (relatedComment != null) {
                 dto.setCommentId(relatedComment.getId());
                 dto.setCommentContent(relatedComment.getContent());

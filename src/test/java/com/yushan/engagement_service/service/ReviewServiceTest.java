@@ -2,7 +2,7 @@ package com.yushan.engagement_service.service;
 
 import com.yushan.engagement_service.client.ContentServiceClient;
 import com.yushan.engagement_service.client.UserServiceClient;
-import com.yushan.engagement_service.dao.ReviewMapper;
+import com.yushan.engagement_service.repository.ReviewRepository;
 import com.yushan.engagement_service.dto.common.ApiResponse;
 import com.yushan.engagement_service.dto.novel.NovelDetailResponseDTO;
 import com.yushan.engagement_service.dto.review.*;
@@ -25,7 +25,7 @@ import static org.mockito.Mockito.*;
 class ReviewServiceTest {
 
     @Mock
-    private ReviewMapper reviewMapper;
+    private ReviewRepository reviewRepository;
 
     @Mock
     private ContentServiceClient contentServiceClient;
@@ -90,13 +90,13 @@ class ReviewServiceTest {
         novelResponse.setData(testNovel);
         
         when(contentServiceClient.getNovelById(testNovelId)).thenReturn(novelResponse);
-        when(reviewMapper.selectByUserAndNovel(testUserId, testNovelId)).thenReturn(null);
-        when(reviewMapper.insertSelective(any(Review.class))).thenAnswer(invocation -> {
+        when(reviewRepository.findByUserAndNovel(testUserId, testNovelId)).thenReturn(null);
+        when(reviewRepository.save(any(Review.class))).thenAnswer(invocation -> {
             Review review = invocation.getArgument(0);
             review.setId(1);
-            return 1;
+            return review;
         });
-        when(reviewMapper.selectByNovelId(testNovelId)).thenReturn(Arrays.asList(testReview));
+        when(reviewRepository.findByNovelId(testNovelId)).thenReturn(Arrays.asList(testReview));
         when(userServiceClient.getUsernameById(testUserId)).thenReturn("testuser");
         when(contentServiceClient.getNovelById(testNovelId)).thenReturn(novelResponse);
 
@@ -112,8 +112,8 @@ class ReviewServiceTest {
         assertFalse(result.getIsSpoiler());
         
         verify(contentServiceClient, times(2)).getNovelById(testNovelId);
-        verify(reviewMapper).selectByUserAndNovel(testUserId, testNovelId);
-        verify(reviewMapper).insertSelective(any(Review.class));
+        verify(reviewRepository).findByUserAndNovel(testUserId, testNovelId);
+        verify(reviewRepository).save(any(Review.class));
         verify(kafkaEventProducerService).publishReviewCreatedEvent(anyInt(), any(UUID.class), eq(testUserId), eq(5), eq("Great novel!"), eq("I really enjoyed this novel."), eq(false));
     }
 
@@ -128,7 +128,7 @@ class ReviewServiceTest {
         });
         
         verify(contentServiceClient).getNovelById(testNovelId);
-        verify(reviewMapper, never()).insertSelective(any(Review.class));
+        verify(reviewRepository, never()).save(any(Review.class));
     }
 
     @Test
@@ -138,7 +138,7 @@ class ReviewServiceTest {
         novelResponse.setData(testNovel);
         
         when(contentServiceClient.getNovelById(testNovelId)).thenReturn(novelResponse);
-        when(reviewMapper.selectByUserAndNovel(testUserId, testNovelId)).thenReturn(testReview);
+        when(reviewRepository.findByUserAndNovel(testUserId, testNovelId)).thenReturn(testReview);
 
         // Act & Assert
         assertThrows(IllegalArgumentException.class, () -> {
@@ -146,14 +146,14 @@ class ReviewServiceTest {
         });
         
         verify(contentServiceClient).getNovelById(testNovelId);
-        verify(reviewMapper).selectByUserAndNovel(testUserId, testNovelId);
-        verify(reviewMapper, never()).insertSelective(any(Review.class));
+        verify(reviewRepository).findByUserAndNovel(testUserId, testNovelId);
+        verify(reviewRepository, never()).save(any(Review.class));
     }
 
     @Test
     void updateReview_WithValidData_ShouldUpdateReview() {
         // Arrange
-        when(reviewMapper.selectByPrimaryKey(1)).thenReturn(testReview);
+        when(reviewRepository.findById(1)).thenReturn(testReview);
 
         // Act
         ReviewResponseDTO result = reviewService.updateReview(1, testUserId, testUpdateRequest);
@@ -165,105 +165,105 @@ class ReviewServiceTest {
         assertEquals("Updated content", result.getContent());
         assertTrue(result.getIsSpoiler());
         
-        verify(reviewMapper).selectByPrimaryKey(1);
-        verify(reviewMapper).updateByPrimaryKeySelective(any(Review.class));
+        verify(reviewRepository).findById(1);
+        verify(reviewRepository).save(any(Review.class));
     }
 
     @Test
     void updateReview_WithNonExistentReview_ShouldThrowException() {
         // Arrange
-        when(reviewMapper.selectByPrimaryKey(1)).thenReturn(null);
+        when(reviewRepository.findById(1)).thenReturn(null);
 
         // Act & Assert
         assertThrows(ResourceNotFoundException.class, () -> {
             reviewService.updateReview(1, testUserId, testUpdateRequest);
         });
         
-        verify(reviewMapper).selectByPrimaryKey(1);
-        verify(reviewMapper, never()).updateByPrimaryKeySelective(any(Review.class));
+        verify(reviewRepository).findById(1);
+        verify(reviewRepository, never()).save(any(Review.class));
     }
 
     @Test
     void updateReview_WithWrongUser_ShouldThrowException() {
         // Arrange
         UUID otherUserId = UUID.randomUUID();
-        when(reviewMapper.selectByPrimaryKey(1)).thenReturn(testReview);
+        when(reviewRepository.findById(1)).thenReturn(testReview);
 
         // Act & Assert
         assertThrows(IllegalArgumentException.class, () -> {
             reviewService.updateReview(1, otherUserId, testUpdateRequest);
         });
         
-        verify(reviewMapper).selectByPrimaryKey(1);
-        verify(reviewMapper, never()).updateByPrimaryKeySelective(any(Review.class));
+        verify(reviewRepository).findById(1);
+        verify(reviewRepository, never()).save(any(Review.class));
     }
 
     @Test
     void deleteReview_WithValidData_ShouldDeleteReview() {
         // Arrange
-        when(reviewMapper.selectByPrimaryKey(1)).thenReturn(testReview);
-        when(reviewMapper.deleteByPrimaryKey(1)).thenReturn(1);
-        when(reviewMapper.selectByNovelId(testNovelId)).thenReturn(Arrays.asList(testReview));
+        when(reviewRepository.findById(1)).thenReturn(testReview);
+        // delete method returns void, no need to mock return value
+        when(reviewRepository.findByNovelId(testNovelId)).thenReturn(Arrays.asList(testReview));
 
         // Act
         boolean result = reviewService.deleteReview(1, testUserId, false);
 
         // Assert
         assertTrue(result);
-        verify(reviewMapper).selectByPrimaryKey(1);
-        verify(reviewMapper).deleteByPrimaryKey(1);
+        verify(reviewRepository).findById(1);
+        verify(reviewRepository).delete(1);
     }
 
     @Test
     void deleteReview_WithNonExistentReview_ShouldThrowException() {
         // Arrange
-        when(reviewMapper.selectByPrimaryKey(1)).thenReturn(null);
+        when(reviewRepository.findById(1)).thenReturn(null);
 
         // Act & Assert
         assertThrows(ResourceNotFoundException.class, () -> {
             reviewService.deleteReview(1, testUserId, false);
         });
         
-        verify(reviewMapper).selectByPrimaryKey(1);
-        verify(reviewMapper, never()).deleteByPrimaryKey(anyInt());
+        verify(reviewRepository).findById(1);
+        verify(reviewRepository, never()).delete(anyInt());
     }
 
     @Test
     void deleteReview_WithWrongUser_ShouldThrowException() {
         // Arrange
         UUID otherUserId = UUID.randomUUID();
-        when(reviewMapper.selectByPrimaryKey(1)).thenReturn(testReview);
+        when(reviewRepository.findById(1)).thenReturn(testReview);
 
         // Act & Assert
         assertThrows(IllegalArgumentException.class, () -> {
             reviewService.deleteReview(1, otherUserId, false);
         });
         
-        verify(reviewMapper).selectByPrimaryKey(1);
-        verify(reviewMapper, never()).deleteByPrimaryKey(anyInt());
+        verify(reviewRepository).findById(1);
+        verify(reviewRepository, never()).delete(anyInt());
     }
 
     @Test
     void deleteReview_WithAdmin_ShouldDeleteReview() {
         // Arrange
         UUID otherUserId = UUID.randomUUID();
-        when(reviewMapper.selectByPrimaryKey(1)).thenReturn(testReview);
-        when(reviewMapper.deleteByPrimaryKey(1)).thenReturn(1);
-        when(reviewMapper.selectByNovelId(testNovelId)).thenReturn(Arrays.asList(testReview));
+        when(reviewRepository.findById(1)).thenReturn(testReview);
+        // delete method returns void, no need to mock return value
+        when(reviewRepository.findByNovelId(testNovelId)).thenReturn(Arrays.asList(testReview));
 
         // Act
         boolean result = reviewService.deleteReview(1, otherUserId, true);
 
         // Assert
         assertTrue(result);
-        verify(reviewMapper).selectByPrimaryKey(1);
-        verify(reviewMapper).deleteByPrimaryKey(1);
+        verify(reviewRepository).findById(1);
+        verify(reviewRepository).delete(1);
     }
 
     @Test
     void getReview_WithValidId_ShouldReturnReview() {
         // Arrange
-        when(reviewMapper.selectByPrimaryKey(1)).thenReturn(testReview);
+        when(reviewRepository.findById(1)).thenReturn(testReview);
         when(userServiceClient.getUsernameById(testUserId)).thenReturn("testuser");
         
         ApiResponse<NovelDetailResponseDTO> novelResponse = new ApiResponse<>();
@@ -281,27 +281,27 @@ class ReviewServiceTest {
         assertEquals("testuser", result.getUsername());
         assertEquals("Test Novel", result.getNovelTitle());
         
-        verify(reviewMapper).selectByPrimaryKey(1);
+        verify(reviewRepository).findById(1);
     }
 
     @Test
     void getReview_WithNonExistentId_ShouldThrowException() {
         // Arrange
-        when(reviewMapper.selectByPrimaryKey(1)).thenReturn(null);
+        when(reviewRepository.findById(1)).thenReturn(null);
 
         // Act & Assert
         assertThrows(ResourceNotFoundException.class, () -> {
             reviewService.getReview(1);
         });
         
-        verify(reviewMapper).selectByPrimaryKey(1);
+        verify(reviewRepository).findById(1);
     }
 
     @Test
     void getReviewsByNovel_WithValidData_ShouldReturnReviews() {
         // Arrange
-        when(reviewMapper.selectReviewsWithPagination(any(ReviewSearchRequestDTO.class))).thenReturn(Arrays.asList(testReview));
-        when(reviewMapper.countReviews(any(ReviewSearchRequestDTO.class))).thenReturn(1L);
+        when(reviewRepository.findReviewsWithPagination(any(ReviewSearchRequestDTO.class))).thenReturn(Arrays.asList(testReview));
+        when(reviewRepository.countReviews(any(ReviewSearchRequestDTO.class))).thenReturn(1L);
         when(userServiceClient.getUsernameById(testUserId)).thenReturn("testuser");
         
         ApiResponse<NovelDetailResponseDTO> novelResponse = new ApiResponse<>();
@@ -318,16 +318,16 @@ class ReviewServiceTest {
         assertEquals(0, result.getCurrentPage());
         assertEquals(10, result.getSize());
         
-        verify(reviewMapper).selectReviewsWithPagination(any(ReviewSearchRequestDTO.class));
-        verify(reviewMapper).countReviews(any(ReviewSearchRequestDTO.class));
+        verify(reviewRepository).findReviewsWithPagination(any(ReviewSearchRequestDTO.class));
+        verify(reviewRepository).countReviews(any(ReviewSearchRequestDTO.class));
     }
 
     @Test
     void getAllReviews_WithValidData_ShouldReturnReviews() {
         // Arrange
         ReviewSearchRequestDTO request = new ReviewSearchRequestDTO(0, 10, "createTime", "desc", testNovelId, null, null, null);
-        when(reviewMapper.selectReviewsWithPagination(request)).thenReturn(Arrays.asList(testReview));
-        when(reviewMapper.countReviews(request)).thenReturn(1L);
+        when(reviewRepository.findReviewsWithPagination(request)).thenReturn(Arrays.asList(testReview));
+        when(reviewRepository.countReviews(request)).thenReturn(1L);
         when(userServiceClient.getUsernameById(testUserId)).thenReturn("testuser");
         
         ApiResponse<NovelDetailResponseDTO> novelResponse = new ApiResponse<>();
@@ -344,16 +344,15 @@ class ReviewServiceTest {
         assertEquals(0, result.getCurrentPage());
         assertEquals(10, result.getSize());
         
-        verify(reviewMapper).selectReviewsWithPagination(request);
-        verify(reviewMapper).countReviews(request);
+        verify(reviewRepository).findReviewsWithPagination(request);
+        verify(reviewRepository).countReviews(request);
     }
 
     @Test
     void toggleLike_WithValidData_ShouldToggleLike() {
         // Arrange
-        when(reviewMapper.selectByPrimaryKey(1)).thenReturn(testReview);
-        when(reviewMapper.updateLikeCount(1, 1)).thenReturn(1);
-        when(reviewMapper.selectByPrimaryKey(1)).thenReturn(testReview);
+        when(reviewRepository.findById(1)).thenReturn(testReview);
+        doNothing().when(reviewRepository).updateLikeCount(1, 1);
         when(userServiceClient.getUsernameById(testUserId)).thenReturn("testuser");
         
         ApiResponse<NovelDetailResponseDTO> novelResponse = new ApiResponse<>();
@@ -367,28 +366,28 @@ class ReviewServiceTest {
         assertNotNull(result);
         assertEquals(1, result.getId());
         
-        verify(reviewMapper, times(2)).selectByPrimaryKey(1);
-        verify(reviewMapper).updateLikeCount(1, 1);
+        verify(reviewRepository, times(2)).findById(1);
+        verify(reviewRepository).updateLikeCount(1, 1);
     }
 
     @Test
     void toggleLike_WithNonExistentReview_ShouldThrowException() {
         // Arrange
-        when(reviewMapper.selectByPrimaryKey(1)).thenReturn(null);
+        when(reviewRepository.findById(1)).thenReturn(null);
 
         // Act & Assert
         assertThrows(ResourceNotFoundException.class, () -> {
             reviewService.toggleLike(1, testUserId, true);
         });
         
-        verify(reviewMapper).selectByPrimaryKey(1);
-        verify(reviewMapper, never()).updateLikeCount(anyInt(), anyInt());
+        verify(reviewRepository).findById(1);
+        verify(reviewRepository, never()).updateLikeCount(anyInt(), anyInt());
     }
 
     @Test
     void getUserReviews_WithValidData_ShouldReturnReviews() {
         // Arrange
-        when(reviewMapper.selectByUserId(testUserId)).thenReturn(Arrays.asList(testReview));
+        when(reviewRepository.findByUserId(testUserId)).thenReturn(Arrays.asList(testReview));
         when(userServiceClient.getUsernameById(testUserId)).thenReturn("testuser");
         
         ApiResponse<NovelDetailResponseDTO> novelResponse = new ApiResponse<>();
@@ -403,39 +402,39 @@ class ReviewServiceTest {
         assertEquals(1, result.size());
         assertEquals(1, result.get(0).getId());
         
-        verify(reviewMapper).selectByUserId(testUserId);
+        verify(reviewRepository).findByUserId(testUserId);
     }
 
     @Test
     void hasUserReviewedNovel_WithExistingReview_ShouldReturnTrue() {
         // Arrange
-        when(reviewMapper.selectByUserAndNovel(testUserId, testNovelId)).thenReturn(testReview);
+        when(reviewRepository.findByUserAndNovel(testUserId, testNovelId)).thenReturn(testReview);
 
         // Act
         boolean result = reviewService.hasUserReviewedNovel(testUserId, testNovelId);
 
         // Assert
         assertTrue(result);
-        verify(reviewMapper).selectByUserAndNovel(testUserId, testNovelId);
+        verify(reviewRepository).findByUserAndNovel(testUserId, testNovelId);
     }
 
     @Test
     void hasUserReviewedNovel_WithNoReview_ShouldReturnFalse() {
         // Arrange
-        when(reviewMapper.selectByUserAndNovel(testUserId, testNovelId)).thenReturn(null);
+        when(reviewRepository.findByUserAndNovel(testUserId, testNovelId)).thenReturn(null);
 
         // Act
         boolean result = reviewService.hasUserReviewedNovel(testUserId, testNovelId);
 
         // Assert
         assertFalse(result);
-        verify(reviewMapper).selectByUserAndNovel(testUserId, testNovelId);
+        verify(reviewRepository).findByUserAndNovel(testUserId, testNovelId);
     }
 
     @Test
     void getUserReviewForNovel_WithExistingReview_ShouldReturnReview() {
         // Arrange
-        when(reviewMapper.selectByUserAndNovel(testUserId, testNovelId)).thenReturn(testReview);
+        when(reviewRepository.findByUserAndNovel(testUserId, testNovelId)).thenReturn(testReview);
         when(userServiceClient.getUsernameById(testUserId)).thenReturn("testuser");
         
         ApiResponse<NovelDetailResponseDTO> novelResponse = new ApiResponse<>();
@@ -450,20 +449,20 @@ class ReviewServiceTest {
         assertEquals(1, result.getId());
         assertEquals(testNovelId, result.getNovelId());
         
-        verify(reviewMapper).selectByUserAndNovel(testUserId, testNovelId);
+        verify(reviewRepository).findByUserAndNovel(testUserId, testNovelId);
     }
 
     @Test
     void getUserReviewForNovel_WithNoReview_ShouldThrowException() {
         // Arrange
-        when(reviewMapper.selectByUserAndNovel(testUserId, testNovelId)).thenReturn(null);
+        when(reviewRepository.findByUserAndNovel(testUserId, testNovelId)).thenReturn(null);
 
         // Act & Assert
         assertThrows(ResourceNotFoundException.class, () -> {
             reviewService.getUserReviewForNovel(testUserId, testNovelId);
         });
         
-        verify(reviewMapper).selectByUserAndNovel(testUserId, testNovelId);
+        verify(reviewRepository).findByUserAndNovel(testUserId, testNovelId);
     }
 
     @Test
@@ -472,7 +471,7 @@ class ReviewServiceTest {
         ApiResponse<NovelDetailResponseDTO> novelResponse = new ApiResponse<>();
         novelResponse.setData(testNovel);
         when(contentServiceClient.getNovelById(testNovelId)).thenReturn(novelResponse);
-        when(reviewMapper.selectByNovelId(testNovelId)).thenReturn(Arrays.asList(testReview));
+        when(reviewRepository.findByNovelId(testNovelId)).thenReturn(Arrays.asList(testReview));
 
         // Act
         NovelRatingStatsDTO result = reviewService.getNovelRatingStats(testNovelId);
@@ -485,7 +484,7 @@ class ReviewServiceTest {
         assertEquals(4.5f, result.getAverageRating());
         
         verify(contentServiceClient).getNovelById(testNovelId);
-        verify(reviewMapper).selectByNovelId(testNovelId);
+        verify(reviewRepository).findByNovelId(testNovelId);
     }
 
     @Test
@@ -494,7 +493,7 @@ class ReviewServiceTest {
         ApiResponse<NovelDetailResponseDTO> novelResponse = new ApiResponse<>();
         novelResponse.setData(testNovel);
         when(contentServiceClient.getNovelById(testNovelId)).thenReturn(novelResponse);
-        when(reviewMapper.selectByNovelId(testNovelId)).thenReturn(new ArrayList<>());
+        when(reviewRepository.findByNovelId(testNovelId)).thenReturn(new ArrayList<>());
 
         // Act
         NovelRatingStatsDTO result = reviewService.getNovelRatingStats(testNovelId);
@@ -507,6 +506,6 @@ class ReviewServiceTest {
         assertEquals(4.5f, result.getAverageRating());
         
         verify(contentServiceClient).getNovelById(testNovelId);
-        verify(reviewMapper).selectByNovelId(testNovelId);
+        verify(reviewRepository).findByNovelId(testNovelId);
     }
 }

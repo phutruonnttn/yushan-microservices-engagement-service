@@ -2,7 +2,7 @@ package com.yushan.engagement_service.service;
 
 import com.yushan.engagement_service.client.ContentServiceClient;
 import com.yushan.engagement_service.client.GamificationServiceClient;
-import com.yushan.engagement_service.dao.VoteMapper;
+import com.yushan.engagement_service.repository.VoteRepository;
 import com.yushan.engagement_service.dto.common.ApiResponse;
 import com.yushan.engagement_service.dto.common.PageResponseDTO;
 import com.yushan.engagement_service.dto.gamification.VoteCheckResponseDTO;
@@ -28,7 +28,7 @@ import static org.mockito.Mockito.*;
 class VoteServiceTest {
 
     @Mock
-    private VoteMapper voteMapper;
+    private VoteRepository voteRepository;
 
     @Mock
     private ContentServiceClient contentServiceClient;
@@ -82,13 +82,13 @@ class VoteServiceTest {
         
         when(contentServiceClient.getNovelById(testNovelId)).thenReturn(novelResponse);
         when(gamificationServiceClient.checkVoteEligibility()).thenReturn(voteCheckResponse);
-        when(voteMapper.insertSelective(any(Vote.class))).thenAnswer(invocation -> {
+        when(voteRepository.save(any(Vote.class))).thenAnswer(invocation -> {
             Vote vote = invocation.getArgument(0);
             vote.setId(1);
-            return 1;
+            return vote;
         });
         // Mock countByNovelId to return 5 (including the vote we just inserted)
-        when(voteMapper.countByNovelId(testNovelId)).thenReturn(5L);
+        when(voteRepository.countByNovelId(testNovelId)).thenReturn(5L);
 
         // Act
         VoteResponseDTO result = voteService.createVote(testNovelId, testUserId);
@@ -102,8 +102,8 @@ class VoteServiceTest {
         
         verify(contentServiceClient).getNovelById(testNovelId);
         verify(gamificationServiceClient).checkVoteEligibility();
-        verify(voteMapper).insertSelective(any(Vote.class));
-        verify(voteMapper).countByNovelId(testNovelId);
+        verify(voteRepository).save(any(Vote.class));
+        verify(voteRepository).countByNovelId(testNovelId);
         verify(kafkaEventProducerService).publishNovelVoteCountUpdateEvent(testNovelId, 5);
         verify(kafkaEventProducerService).publishVoteCreatedEvent(anyInt(), eq(testUserId));
         // Verify no longer calling sync API
@@ -123,7 +123,7 @@ class VoteServiceTest {
         
         verify(contentServiceClient).getNovelById(testNovelId);
         verify(gamificationServiceClient, never()).checkVoteEligibility();
-        verify(voteMapper, never()).insertSelective(any(Vote.class));
+        verify(voteRepository, never()).save(any(Vote.class));
     }
 
     @Test
@@ -142,7 +142,7 @@ class VoteServiceTest {
         
         verify(contentServiceClient).getNovelById(testNovelId);
         verify(gamificationServiceClient, never()).checkVoteEligibility();
-        verify(voteMapper, never()).insertSelective(any(Vote.class));
+        verify(voteRepository, never()).save(any(Vote.class));
     }
 
     @Test
@@ -161,7 +161,7 @@ class VoteServiceTest {
         
         verify(contentServiceClient).getNovelById(testNovelId);
         verify(gamificationServiceClient).checkVoteEligibility();
-        verify(voteMapper, never()).insertSelective(any(Vote.class));
+        verify(voteRepository, never()).save(any(Vote.class));
     }
 
     @Test
@@ -183,7 +183,7 @@ class VoteServiceTest {
         
         verify(contentServiceClient).getNovelById(testNovelId);
         verify(gamificationServiceClient).checkVoteEligibility();
-        verify(voteMapper, never()).insertSelective(any(Vote.class));
+        verify(voteRepository, never()).save(any(Vote.class));
     }
 
     @Test
@@ -209,7 +209,7 @@ class VoteServiceTest {
         
         verify(contentServiceClient).getNovelById(testNovelId);
         verify(gamificationServiceClient).checkVoteEligibility();
-        verify(voteMapper, never()).insertSelective(any(Vote.class));
+        verify(voteRepository, never()).save(any(Vote.class));
     }
 
     @Test
@@ -235,7 +235,7 @@ class VoteServiceTest {
         
         verify(contentServiceClient).getNovelById(testNovelId);
         verify(gamificationServiceClient).checkVoteEligibility();
-        verify(voteMapper, never()).insertSelective(any(Vote.class));
+        verify(voteRepository, never()).save(any(Vote.class));
     }
 
     @Test
@@ -245,8 +245,8 @@ class VoteServiceTest {
         int size = 10;
         long totalElements = 1L;
         
-        when(voteMapper.countByUserId(testUserId)).thenReturn(totalElements);
-        when(voteMapper.selectByUserIdWithPagination(testUserId, 0, size)).thenReturn(Arrays.asList(testVote));
+        when(voteRepository.countByUserId(testUserId)).thenReturn(totalElements);
+        when(voteRepository.findByUserIdWithPagination(testUserId, 0, size)).thenReturn(Arrays.asList(testVote));
         
         ApiResponse<List<NovelDetailResponseDTO>> novelResponse = new ApiResponse<>();
         novelResponse.setData(Arrays.asList(testNovel));
@@ -267,8 +267,8 @@ class VoteServiceTest {
         assertEquals("Test Novel", voteDTO.getNovelTitle());
         assertNotNull(voteDTO.getVotedTime());
         
-        verify(voteMapper).countByUserId(testUserId);
-        verify(voteMapper).selectByUserIdWithPagination(testUserId, 0, size);
+        verify(voteRepository).countByUserId(testUserId);
+        verify(voteRepository).findByUserIdWithPagination(testUserId, 0, size);
         verify(contentServiceClient).getNovelsBatch(Arrays.asList(testNovelId));
     }
 
@@ -279,7 +279,7 @@ class VoteServiceTest {
         int size = 10;
         long totalElements = 0L;
         
-        when(voteMapper.countByUserId(testUserId)).thenReturn(totalElements);
+        when(voteRepository.countByUserId(testUserId)).thenReturn(totalElements);
 
         // Act
         PageResponseDTO<VoteUserResponseDTO> result = voteService.getUserVotes(testUserId, page, size);
@@ -291,8 +291,8 @@ class VoteServiceTest {
         assertEquals(page, result.getCurrentPage());
         assertEquals(size, result.getSize());
         
-        verify(voteMapper).countByUserId(testUserId);
-        verify(voteMapper, never()).selectByUserIdWithPagination(any(), anyInt(), anyInt());
+        verify(voteRepository).countByUserId(testUserId);
+        verify(voteRepository, never()).findByUserIdWithPagination(any(), anyInt(), anyInt());
         verify(contentServiceClient, never()).getNovelsBatch(any());
     }
 
@@ -303,8 +303,8 @@ class VoteServiceTest {
         int size = 10;
         long totalElements = 1L;
         
-        when(voteMapper.countByUserId(testUserId)).thenReturn(totalElements);
-        when(voteMapper.selectByUserIdWithPagination(testUserId, 0, size)).thenReturn(Collections.emptyList());
+        when(voteRepository.countByUserId(testUserId)).thenReturn(totalElements);
+        when(voteRepository.findByUserIdWithPagination(testUserId, 0, size)).thenReturn(Collections.emptyList());
 
         // Act
         PageResponseDTO<VoteUserResponseDTO> result = voteService.getUserVotes(testUserId, page, size);
@@ -316,8 +316,8 @@ class VoteServiceTest {
         assertEquals(page, result.getCurrentPage());
         assertEquals(size, result.getSize());
         
-        verify(voteMapper).countByUserId(testUserId);
-        verify(voteMapper).selectByUserIdWithPagination(testUserId, 0, size);
+        verify(voteRepository).countByUserId(testUserId);
+        verify(voteRepository).findByUserIdWithPagination(testUserId, 0, size);
         verify(contentServiceClient, never()).getNovelsBatch(any());
     }
 
@@ -328,8 +328,8 @@ class VoteServiceTest {
         int size = 10;
         long totalElements = 1L;
         
-        when(voteMapper.countByUserId(testUserId)).thenReturn(totalElements);
-        when(voteMapper.selectByUserIdWithPagination(testUserId, 0, size)).thenReturn(Arrays.asList(testVote));
+        when(voteRepository.countByUserId(testUserId)).thenReturn(totalElements);
+        when(voteRepository.findByUserIdWithPagination(testUserId, 0, size)).thenReturn(Arrays.asList(testVote));
         
         ApiResponse<List<NovelDetailResponseDTO>> novelResponse = new ApiResponse<>();
         novelResponse.setData(Collections.emptyList()); // No novels found
@@ -346,8 +346,8 @@ class VoteServiceTest {
         assertEquals(testNovelId, voteDTO.getNovelId());
         assertEquals("Novel not found", voteDTO.getNovelTitle());
         
-        verify(voteMapper).countByUserId(testUserId);
-        verify(voteMapper).selectByUserIdWithPagination(testUserId, 0, size);
+        verify(voteRepository).countByUserId(testUserId);
+        verify(voteRepository).findByUserIdWithPagination(testUserId, 0, size);
         verify(contentServiceClient).getNovelsBatch(Arrays.asList(testNovelId));
     }
 
@@ -358,8 +358,8 @@ class VoteServiceTest {
         int size = 10;
         long totalElements = 1L;
         
-        when(voteMapper.countByUserId(testUserId)).thenReturn(totalElements);
-        when(voteMapper.selectByUserIdWithPagination(testUserId, 0, size)).thenReturn(Arrays.asList(testVote));
+        when(voteRepository.countByUserId(testUserId)).thenReturn(totalElements);
+        when(voteRepository.findByUserIdWithPagination(testUserId, 0, size)).thenReturn(Arrays.asList(testVote));
         
         when(contentServiceClient.getNovelsBatch(Arrays.asList(testNovelId))).thenReturn(null);
 
@@ -374,8 +374,8 @@ class VoteServiceTest {
         assertEquals(testNovelId, voteDTO.getNovelId());
         assertEquals("Novel not found", voteDTO.getNovelTitle());
         
-        verify(voteMapper).countByUserId(testUserId);
-        verify(voteMapper).selectByUserIdWithPagination(testUserId, 0, size);
+        verify(voteRepository).countByUserId(testUserId);
+        verify(voteRepository).findByUserIdWithPagination(testUserId, 0, size);
         verify(contentServiceClient).getNovelsBatch(Arrays.asList(testNovelId));
     }
 
@@ -387,8 +387,8 @@ class VoteServiceTest {
         int expectedOffset = 10; // page * size = 2 * 5
         long totalElements = 15L;
         
-        when(voteMapper.countByUserId(testUserId)).thenReturn(totalElements);
-        when(voteMapper.selectByUserIdWithPagination(testUserId, expectedOffset, size)).thenReturn(Arrays.asList(testVote));
+        when(voteRepository.countByUserId(testUserId)).thenReturn(totalElements);
+        when(voteRepository.findByUserIdWithPagination(testUserId, expectedOffset, size)).thenReturn(Arrays.asList(testVote));
         
         ApiResponse<List<NovelDetailResponseDTO>> novelResponse = new ApiResponse<>();
         novelResponse.setData(Arrays.asList(testNovel));
@@ -402,7 +402,7 @@ class VoteServiceTest {
         assertEquals(page, result.getCurrentPage());
         assertEquals(size, result.getSize());
         
-        verify(voteMapper).countByUserId(testUserId);
-        verify(voteMapper).selectByUserIdWithPagination(testUserId, expectedOffset, size);
+        verify(voteRepository).countByUserId(testUserId);
+        verify(voteRepository).findByUserIdWithPagination(testUserId, expectedOffset, size);
     }
 }

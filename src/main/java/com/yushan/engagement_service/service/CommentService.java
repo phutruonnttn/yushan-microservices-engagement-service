@@ -2,7 +2,7 @@ package com.yushan.engagement_service.service;
 
 import com.yushan.engagement_service.client.ContentServiceClient;
 import com.yushan.engagement_service.client.UserServiceClient;
-import com.yushan.engagement_service.dao.CommentMapper;
+import com.yushan.engagement_service.repository.CommentRepository;
 import com.yushan.engagement_service.dto.comment.*;
 import com.yushan.engagement_service.dto.chapter.ChapterDetailResponseDTO;
 import com.yushan.engagement_service.entity.Comment;
@@ -20,7 +20,7 @@ import java.util.stream.Collectors;
 public class CommentService {
 
     @Autowired
-    private CommentMapper commentMapper;
+    private CommentRepository commentRepository;
 
     @Autowired
     private ContentServiceClient contentServiceClient;
@@ -43,7 +43,7 @@ public class CommentService {
         }
 
         // Check if user already commented on this chapter
-        boolean alreadyCommented = commentMapper.existsByUserAndChapter(userId, request.getChapterId());
+        boolean alreadyCommented = commentRepository.existsByUserAndChapter(userId, request.getChapterId());
         if (alreadyCommented) {
             throw new IllegalArgumentException("You have already commented on this chapter");
         }
@@ -56,7 +56,7 @@ public class CommentService {
         comment.setSpoilerStatus(request.getIsSpoiler());
         comment.initializeAsNew();
 
-        commentMapper.insertSelective(comment);
+        commentRepository.save(comment);
 
         // Publish Kafka event for gamification
         kafkaEventProducerService.publishCommentCreatedEvent(
@@ -76,7 +76,7 @@ public class CommentService {
      */
     @Transactional
     public CommentResponseDTO updateComment(Integer commentId, UUID userId, CommentUpdateRequestDTO request) {
-        Comment existingComment = commentMapper.selectByPrimaryKey(commentId);
+        Comment existingComment = commentRepository.findById(commentId);
         if (existingComment == null) {
             throw new ResourceNotFoundException("Comment not found");
         }
@@ -103,7 +103,7 @@ public class CommentService {
         }
 
         if (hasChanges) {
-            commentMapper.updateByPrimaryKeySelective(existingComment);
+            commentRepository.save(existingComment);
         }
 
         return toResponseDTO(existingComment, userId);
@@ -115,7 +115,7 @@ public class CommentService {
      */
     @Transactional
     public boolean deleteComment(Integer commentId, UUID userId, boolean isAdmin) {
-        Comment comment = commentMapper.selectByPrimaryKey(commentId);
+        Comment comment = commentRepository.findById(commentId);
         if (comment == null) {
             throw new ResourceNotFoundException("Comment not found");
         }
@@ -125,15 +125,15 @@ public class CommentService {
             throw new IllegalArgumentException("You can only delete your own comments");
         }
 
-        int result = commentMapper.deleteByPrimaryKey(commentId);
-        return result > 0;
+        commentRepository.delete(commentId);
+        return true;
     }
 
     /**
      * Get comment by ID
      */
     public CommentResponseDTO getComment(Integer commentId, UUID currentUserId) {
-        Comment comment = commentMapper.selectByPrimaryKey(commentId);
+        Comment comment = commentRepository.findById(commentId);
         if (comment == null) {
             throw new ResourceNotFoundException("Comment not found");
         }
@@ -167,8 +167,8 @@ public class CommentService {
                 .size(size)
                 .build();
 
-        List<Comment> comments = commentMapper.selectCommentsWithPagination(request);
-        long totalCount = commentMapper.countComments(request);
+        List<Comment> comments = commentRepository.findCommentsWithPagination(request);
+        long totalCount = commentRepository.countComments(request);
 
         List<CommentResponseDTO> commentDTOs = comments.stream()
                 .map(c -> toResponseDTO(c, currentUserId))
@@ -220,7 +220,7 @@ public class CommentService {
                     .build();
         }
 
-        List<Comment> comments = commentMapper.selectCommentsByNovelWithPagination(
+        List<Comment> comments = commentRepository.findCommentsByNovelWithPagination(
                 chapterIds,
                 request.getIsSpoiler(),
                 request.getSearch(),
@@ -230,7 +230,7 @@ public class CommentService {
                 request.getSize()
         );
 
-        long totalCount = commentMapper.countCommentsByNovel(
+        long totalCount = commentRepository.countCommentsByNovel(
                 chapterIds,
                 request.getIsSpoiler(),
                 request.getSearch()
@@ -266,8 +266,8 @@ public class CommentService {
             request.setOrder("desc");
         }
 
-        List<Comment> comments = commentMapper.selectCommentsWithPagination(request);
-        long totalCount = commentMapper.countComments(request);
+        List<Comment> comments = commentRepository.findCommentsWithPagination(request);
+        long totalCount = commentRepository.countComments(request);
 
         List<CommentResponseDTO> commentDTOs = comments.stream()
                 .map(c -> toResponseDTO(c, currentUserId))
@@ -288,7 +288,7 @@ public class CommentService {
      * Get user's comments
      */
     public List<CommentResponseDTO> getUserComments(UUID userId) {
-        List<Comment> comments = commentMapper.selectByUserId(userId);
+        List<Comment> comments = commentRepository.findByUserId(userId);
         return comments.stream()
                 .map(c -> toResponseDTO(c, userId))
                 .collect(Collectors.toList());
@@ -300,19 +300,17 @@ public class CommentService {
      */
     @Transactional
     public CommentResponseDTO toggleLike(Integer commentId, UUID currentUserId, boolean isLiking) {
-        Comment comment = commentMapper.selectByPrimaryKey(commentId);
+        Comment comment = commentRepository.findById(commentId);
         if (comment == null) {
             throw new ResourceNotFoundException("Comment not found");
         }
 
         // Increment or decrement like count
         int increment = isLiking ? 1 : -1;
-        int result = commentMapper.updateLikeCount(commentId, increment);
+        commentRepository.updateLikeCount(commentId, increment);
 
-        if (result > 0) {
-            // Fetch updated comment
-            comment = commentMapper.selectByPrimaryKey(commentId);
-        }
+        // Fetch updated comment
+        comment = commentRepository.findById(commentId);
 
         return toResponseDTO(comment, currentUserId);
     }
@@ -321,7 +319,7 @@ public class CommentService {
      * Check if user has commented on a chapter
      */
     public boolean hasUserCommentedOnChapter(UUID userId, Integer chapterId) {
-        return commentMapper.existsByUserAndChapter(userId, chapterId);
+        return commentRepository.existsByUserAndChapter(userId, chapterId);
     }
 
     /**
@@ -333,7 +331,7 @@ public class CommentService {
             throw new ResourceNotFoundException("Chapter not found");
         }
 
-        List<Comment> comments = commentMapper.selectByChapterId(chapterId);
+        List<Comment> comments = commentRepository.findByChapterId(chapterId);
 
         CommentStatisticsDTO stats = CommentStatisticsDTO.builder()
                 .chapterId(chapterId)
@@ -388,12 +386,10 @@ public class CommentService {
 
         int deletedCount = 0;
         for (Integer commentId : request.getCommentIds()) {
-            Comment comment = commentMapper.selectByPrimaryKey(commentId);
+            Comment comment = commentRepository.findById(commentId);
             if (comment != null) {
-                int result = commentMapper.deleteByPrimaryKey(commentId);
-                if (result > 0) {
-                    deletedCount++;
-                }
+                commentRepository.delete(commentId);
+                deletedCount++;
             }
         }
 
@@ -446,7 +442,7 @@ public class CommentService {
                 .size(Integer.MAX_VALUE)
                 .build();
 
-        long totalComments = commentMapper.countComments(allCommentsRequest);
+        long totalComments = commentRepository.countComments(allCommentsRequest);
         stats.setTotalComments(totalComments);
 
         // Count spoiler vs non-spoiler
@@ -455,27 +451,27 @@ public class CommentService {
                 .page(0)
                 .size(1)
                 .build();
-        long spoilerCount = commentMapper.countComments(spoilerRequest);
+        long spoilerCount = commentRepository.countComments(spoilerRequest);
         stats.setSpoilerComments(spoilerCount);
         stats.setNonSpoilerComments(totalComments - spoilerCount);
 
         // Time-based statistics
-        stats.setCommentsToday(commentMapper.countCommentsInLastDays(1));
-        stats.setCommentsThisWeek(commentMapper.countCommentsInLastDays(7));
-        stats.setCommentsThisMonth(commentMapper.countCommentsInLastDays(30));
+        stats.setCommentsToday(commentRepository.countCommentsInLastDays(1));
+        stats.setCommentsThisWeek(commentRepository.countCommentsInLastDays(7));
+        stats.setCommentsThisMonth(commentRepository.countCommentsInLastDays(30));
 
         // Get most active user
-        Comment mostActiveUserComment = commentMapper.selectMostActiveUser();
+        Comment mostActiveUserComment = commentRepository.selectMostActiveUser();
         if (mostActiveUserComment != null) {
             String username = userServiceClient.getUsernameById(mostActiveUserComment.getUserId());
             stats.setMostActiveUsername(username != null ? username : "Unknown");
             stats.setMostActiveUserCommentCount(
-                    commentMapper.countCommentsByUser(mostActiveUserComment.getUserId())
+                    commentRepository.countCommentsByUser(mostActiveUserComment.getUserId())
             );
         }
 
         // Get most commented chapter
-        Comment mostCommentedChapterComment = commentMapper.selectMostCommentedChapter();
+        Comment mostCommentedChapterComment = commentRepository.selectMostCommentedChapter();
         if (mostCommentedChapterComment != null) {
             stats.setMostCommentedChapterId(mostCommentedChapterComment.getChapterId());
             ChapterDetailResponseDTO chapter = contentServiceClient.getChapter(mostCommentedChapterComment.getChapterId());
@@ -483,7 +479,7 @@ public class CommentService {
                 stats.setMostCommentedChapterTitle(chapter.getTitle());
             }
             stats.setMostCommentedChapterCount(
-                    commentMapper.countByChapterId(mostCommentedChapterComment.getChapterId())
+                    commentRepository.countByChapterId(mostCommentedChapterComment.getChapterId())
             );
         }
 
@@ -495,14 +491,12 @@ public class CommentService {
      */
     @Transactional
     public int deleteAllUserComments(UUID userId) {
-        List<Comment> userComments = commentMapper.selectByUserId(userId);
+        List<Comment> userComments = commentRepository.findByUserId(userId);
         int deletedCount = 0;
 
         for (Comment comment : userComments) {
-            int result = commentMapper.deleteByPrimaryKey(comment.getId());
-            if (result > 0) {
-                deletedCount++;
-            }
+            commentRepository.delete(comment.getId());
+            deletedCount++;
         }
 
         return deletedCount;
@@ -513,14 +507,12 @@ public class CommentService {
      */
     @Transactional
     public int deleteAllChapterComments(Integer chapterId) {
-        List<Comment> chapterComments = commentMapper.selectByChapterId(chapterId);
+        List<Comment> chapterComments = commentRepository.findByChapterId(chapterId);
         int deletedCount = 0;
 
         for (Comment comment : chapterComments) {
-            int result = commentMapper.deleteByPrimaryKey(comment.getId());
-            if (result > 0) {
-                deletedCount++;
-            }
+            commentRepository.delete(comment.getId());
+            deletedCount++;
         }
 
         return deletedCount;
@@ -538,13 +530,11 @@ public class CommentService {
         int updatedCount = 0;
 
         for (Integer commentId : request.getCommentIds()) {
-            Comment comment = commentMapper.selectByPrimaryKey(commentId);
+            Comment comment = commentRepository.findById(commentId);
             if (comment != null) {
                 comment.setSpoilerStatus(request.getIsSpoiler());
-                int result = commentMapper.updateByPrimaryKeySelective(comment);
-                if (result > 0) {
-                    updatedCount++;
-                }
+                commentRepository.save(comment);
+                updatedCount++;
             }
         }
 
