@@ -36,6 +36,9 @@ public class VoteService {
     @Autowired
     private KafkaEventProducerService kafkaEventProducerService;
 
+    @Autowired
+    private TransactionAwareKafkaPublisher transactionAwareKafkaPublisher;
+
     /**
      * Create vote for a novel
      */
@@ -84,14 +87,18 @@ public class VoteService {
         // Calculate vote count from local DB (engagement-service is source of truth)
         Integer voteCount = (int) voteRepository.countByNovelId(novelId);
         
-        // Publish Kafka event to update vote count in content service
-        kafkaEventProducerService.publishNovelVoteCountUpdateEvent(novelId, voteCount);
-        
-        // Publish Kafka event for gamification
-        kafkaEventProducerService.publishVoteCreatedEvent(
-                vote.getId(),
-                userId
-        );
+        // Publish Kafka events AFTER transaction commit
+        final Integer finalNovelId = novelId;
+        final Integer finalVoteCount = voteCount;
+        final Integer finalVoteId = vote.getId();
+        final UUID finalUserId = userId;
+        transactionAwareKafkaPublisher.publishAfterCommit(() -> {
+            // Publish Kafka event to update vote count in content service
+            kafkaEventProducerService.publishNovelVoteCountUpdateEvent(finalNovelId, finalVoteCount);
+            
+            // Publish Kafka event for gamification
+            kafkaEventProducerService.publishVoteCreatedEvent(finalVoteId, finalUserId);
+        });
 
         return new VoteResponseDTO(novelId, voteCount, true, remainedYuan);
     }
