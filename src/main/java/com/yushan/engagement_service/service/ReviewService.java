@@ -33,6 +33,9 @@ public class ReviewService {
     @Autowired
     private KafkaEventProducerService kafkaEventProducerService;
 
+    @Autowired
+    private TransactionAwareKafkaPublisher transactionAwareKafkaPublisher;
+
     /**
      * Create a new review
      * Checks if user already reviewed the novel
@@ -66,16 +69,25 @@ public class ReviewService {
         // Update novel rating and review count
         updateNovelRatingAndCount(request.getNovelId());
 
-        // Publish Kafka event for gamification
-        kafkaEventProducerService.publishReviewCreatedEvent(
-                review.getId(),
-                review.getUuid(),
-                userId,
-                request.getRating(),
-                request.getTitle(),
-                request.getContent(),
-                request.getIsSpoiler()
-        );
+        // Publish Kafka event for gamification AFTER transaction commit
+        final Integer finalReviewId = review.getId();
+        final UUID finalReviewUuid = review.getUuid();
+        final UUID finalUserId = userId;
+        final Integer finalRating = request.getRating();
+        final String finalTitle = request.getTitle();
+        final String finalContent = request.getContent();
+        final Boolean finalIsSpoiler = request.getIsSpoiler();
+        transactionAwareKafkaPublisher.publishAfterCommit(() -> {
+            kafkaEventProducerService.publishReviewCreatedEvent(
+                    finalReviewId,
+                    finalReviewUuid,
+                    finalUserId,
+                    finalRating,
+                    finalTitle,
+                    finalContent,
+                    finalIsSpoiler
+            );
+        });
 
         return toResponseDTO(review);
     }
@@ -336,8 +348,13 @@ public class ReviewService {
             reviewCount = reviews.size();
         }
         
-        // Publish Kafka event instead of sync API call
-        kafkaEventProducerService.publishNovelRatingUpdateEvent(novelId, avgRating, reviewCount);
+        // Publish Kafka event AFTER transaction commit
+        final Integer finalNovelId = novelId;
+        final Float finalAvgRating = avgRating;
+        final Integer finalReviewCount = reviewCount;
+        transactionAwareKafkaPublisher.publishAfterCommit(() -> {
+            kafkaEventProducerService.publishNovelRatingUpdateEvent(finalNovelId, finalAvgRating, finalReviewCount);
+        });
     }
 
     /**

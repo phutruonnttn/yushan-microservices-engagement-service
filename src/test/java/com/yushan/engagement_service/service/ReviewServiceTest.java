@@ -36,6 +36,9 @@ class ReviewServiceTest {
     @Mock
     private KafkaEventProducerService kafkaEventProducerService;
 
+    @Mock
+    private TransactionAwareKafkaPublisher transactionAwareKafkaPublisher;
+
     @InjectMocks
     private ReviewService reviewService;
 
@@ -114,7 +117,8 @@ class ReviewServiceTest {
         verify(contentServiceClient, times(2)).getNovelById(testNovelId);
         verify(reviewRepository).findByUserAndNovel(testUserId, testNovelId);
         verify(reviewRepository).save(any(Review.class));
-        verify(kafkaEventProducerService).publishReviewCreatedEvent(anyInt(), any(UUID.class), eq(testUserId), eq(5), eq("Great novel!"), eq("I really enjoyed this novel."), eq(false));
+        // Verify publishAfterCommit is called (may be called multiple times: once for review event, once for rating update)
+        verify(transactionAwareKafkaPublisher, atLeastOnce()).publishAfterCommit(any(Runnable.class));
     }
 
     @Test

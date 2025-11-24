@@ -29,6 +29,7 @@ public class CommentServiceTest {
     private ContentServiceClient contentServiceClient;
     private UserServiceClient userServiceClient;
     private KafkaEventProducerService kafkaEventProducerService;
+    private TransactionAwareKafkaPublisher transactionAwareKafkaPublisher;
     private CommentService commentService;
 
     @BeforeEach
@@ -37,6 +38,7 @@ public class CommentServiceTest {
         contentServiceClient = Mockito.mock(ContentServiceClient.class);
         userServiceClient = Mockito.mock(UserServiceClient.class);
         kafkaEventProducerService = Mockito.mock(KafkaEventProducerService.class);
+        transactionAwareKafkaPublisher = Mockito.mock(TransactionAwareKafkaPublisher.class);
 
         commentService = new CommentService();
         try {
@@ -55,6 +57,10 @@ public class CommentServiceTest {
             java.lang.reflect.Field f4 = CommentService.class.getDeclaredField("kafkaEventProducerService");
             f4.setAccessible(true);
             f4.set(commentService, kafkaEventProducerService);
+            
+            java.lang.reflect.Field f5 = CommentService.class.getDeclaredField("transactionAwareKafkaPublisher");
+            f5.setAccessible(true);
+            f5.set(commentService, transactionAwareKafkaPublisher);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -85,7 +91,7 @@ public class CommentServiceTest {
         assertEquals("Test comment", result.getContent());
         assertFalse(result.getIsSpoiler());
         verify(commentRepository).save(any(Comment.class));
-        verify(kafkaEventProducerService).publishCommentCreatedEvent(eq(123), eq(userId), eq(1), eq("Test comment"), eq(false));
+        verify(transactionAwareKafkaPublisher).publishAfterCommit(any(Runnable.class));
     }
 
     @Test

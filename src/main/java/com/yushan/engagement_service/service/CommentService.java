@@ -31,6 +31,9 @@ public class CommentService {
     @Autowired
     private KafkaEventProducerService kafkaEventProducerService;
 
+    @Autowired
+    private TransactionAwareKafkaPublisher transactionAwareKafkaPublisher;
+
     /**
      * Create a new comment
      * Users can only have one comment per chapter
@@ -58,14 +61,21 @@ public class CommentService {
 
         commentRepository.save(comment);
 
-        // Publish Kafka event for gamification
-        kafkaEventProducerService.publishCommentCreatedEvent(
-                comment.getId(),
-                userId,
-                request.getChapterId(),
-                request.getContent(),
-                request.getIsSpoiler()
-        );
+        // Publish Kafka event for gamification AFTER transaction commit
+        final Integer finalCommentId = comment.getId();
+        final UUID finalUserId = userId;
+        final Integer finalChapterId = request.getChapterId();
+        final String finalContent = request.getContent();
+        final Boolean finalIsSpoiler = request.getIsSpoiler();
+        transactionAwareKafkaPublisher.publishAfterCommit(() -> {
+            kafkaEventProducerService.publishCommentCreatedEvent(
+                    finalCommentId,
+                    finalUserId,
+                    finalChapterId,
+                    finalContent,
+                    finalIsSpoiler
+            );
+        });
 
         return toResponseDTO(comment, userId);
     }

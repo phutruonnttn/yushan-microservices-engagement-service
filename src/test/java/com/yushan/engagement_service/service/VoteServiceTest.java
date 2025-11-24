@@ -39,6 +39,9 @@ class VoteServiceTest {
     @Mock
     private KafkaEventProducerService kafkaEventProducerService;
 
+    @Mock
+    private TransactionAwareKafkaPublisher transactionAwareKafkaPublisher;
+
     @InjectMocks
     private VoteService voteService;
 
@@ -104,8 +107,7 @@ class VoteServiceTest {
         verify(gamificationServiceClient).checkVoteEligibility();
         verify(voteRepository).save(any(Vote.class));
         verify(voteRepository).countByNovelId(testNovelId);
-        verify(kafkaEventProducerService).publishNovelVoteCountUpdateEvent(testNovelId, 5);
-        verify(kafkaEventProducerService).publishVoteCreatedEvent(anyInt(), eq(testUserId));
+        verify(transactionAwareKafkaPublisher).publishAfterCommit(any(Runnable.class));
         // Verify no longer calling sync API
         verify(contentServiceClient, never()).incrementVoteCount(anyInt());
         verify(contentServiceClient, never()).getNovelVoteCount(anyInt());
