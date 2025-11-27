@@ -276,13 +276,80 @@ Once this basic setup is working:
 
 ---
 
+## 🔄 Resilience & Fault Tolerance
+
+### Circuit Breaker (Resilience4j)
+
+The Engagement Service implements Circuit Breaker pattern for all inter-service calls to prevent cascading failures:
+
+**Feign Clients with Circuit Breaker**:
+- ✅ **ContentServiceClient**: 7 methods protected with Circuit Breaker and fallback methods
+- ✅ **UserServiceClient**: 1 method protected with Circuit Breaker and fallback
+- ✅ **GamificationServiceClient**: 1 method protected with Circuit Breaker and fallback
+
+**Configuration**:
+```yaml
+resilience4j:
+  circuitbreaker:
+    instances:
+      content-service:
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 20
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+        permittedNumberOfCallsInHalfOpenState: 5
+      user-service:
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 20
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+      gamification-service:
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 20
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+  retry:
+    instances:
+      content-service:
+        maxAttempts: 3
+        waitDuration: 1000ms
+```
+
+**Fallback Strategy**: All Feign client methods have fallback methods that return default/empty responses when services are unavailable, ensuring graceful degradation.
+
+### Rate Limiter (Resilience4j)
+
+Rate limiting is implemented on critical endpoints to prevent spam and abuse:
+
+**Protected Endpoints**:
+- ✅ **POST** `/api/v1/comments` - `@RateLimiter(name = "comment-creation")` - 10 requests/60s
+- ✅ **POST** `/api/v1/reviews` - `@RateLimiter(name = "review-creation")` - 5 requests/60s
+
+**Configuration**:
+```yaml
+resilience4j:
+  ratelimiter:
+    instances:
+      comment-creation:
+        limitForPeriod: 10
+        limitRefreshPeriod: 60s
+        timeoutDuration: 0ms
+      review-creation:
+        limitForPeriod: 5
+        limitRefreshPeriod: 60s
+        timeoutDuration: 0ms
+```
+
+**Response**: When rate limit is exceeded, the service returns **429 Too Many Requests** with a `Retry-After` header.
+
 ## Performance Tips
 1. **Caching**: Cache popular content (hot comments, top reviews) in Redis
 2. **Pagination**: Always use pagination for lists and feeds
 3. **Indexing**: Index foreign keys, timestamps, and user_id columns
-4. **Rate Limiting**: Limit comment/review creation frequency
+4. **Rate Limiting**: ✅ Implemented via Resilience4j Rate Limiter on comment/review creation
 5. **Async Processing**: Use async for notifications and analytics events
 6. **Read Replicas**: Use database read replicas for heavy read operations
+7. **Circuit Breaker**: ✅ Implemented for all inter-service calls to prevent cascading failures
 
 ---
 

@@ -13,6 +13,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Operation;
+import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 
 import java.util.List;
 import java.util.UUID;
@@ -34,6 +35,7 @@ public class CommentController {
      */
     @PostMapping
     @PreAuthorize("hasAnyRole('USER','AUTHOR','ADMIN')")
+    @RateLimiter(name = "comment-creation")
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "[USER] Create comment", description = "Create a new comment on a chapter. One per chapter per user.")
     public ApiResponse<CommentResponseDTO> createComment(@Valid @RequestBody CommentCreateRequestDTO request,

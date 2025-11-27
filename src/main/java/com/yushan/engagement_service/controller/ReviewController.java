@@ -14,6 +14,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Operation;
+import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 
 import java.util.List;
 import java.util.UUID;
@@ -31,6 +32,7 @@ public class ReviewController {
      */
     @PostMapping
     @PreAuthorize("hasAnyRole('USER','AUTHOR','ADMIN')")
+    @RateLimiter(name = "review-creation")
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "[USER] Create review", description = "Create a new review for a novel. One per novel per user.")
     public ApiResponse<ReviewResponseDTO> createReview(@Valid @RequestBody ReviewCreateRequestDTO request,
