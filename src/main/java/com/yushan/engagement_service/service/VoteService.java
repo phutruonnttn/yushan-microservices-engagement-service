@@ -39,11 +39,78 @@ public class VoteService {
     @Autowired
     private TransactionAwareKafkaPublisher transactionAwareKafkaPublisher;
 
+    @org.springframework.beans.factory.annotation.Value("${saga.vote-creation.enabled:true}")
+    private boolean sagaEnabled;
+
     /**
      * Create vote for a novel
+     * Uses SAGA pattern if enabled, otherwise uses legacy flow
      */
     @Transactional
     public VoteResponseDTO createVote(Integer novelId, UUID userId) {
+        if (sagaEnabled) {
+            return createVoteWithSaga(novelId, userId);
+        } else {
+            return createVoteLegacy(novelId, userId);
+        }
+    }
+
+    /**
+     * Create vote using SAGA pattern (distributed transaction)
+     */
+    private VoteResponseDTO createVoteWithSaga(Integer novelId, UUID userId) {
+        // Validate novel exists and get authorId via content service
+        ApiResponse<NovelDetailResponseDTO> novelResp = contentServiceClient.getNovelById(novelId);
+        if (novelResp == null || novelResp.getData() == null) {
+            throw new ValidationException("Novel does not exist: " + novelId);
+        }
+        NovelDetailResponseDTO novel = novelResp.getData();
+
+        // Author cannot vote own novel
+        if (novel.getAuthorId() != null && novel.getAuthorId().equals(userId)) {
+            throw new ValidationException("Cannot vote your own novel");
+        }
+
+        // Check balance BEFORE publishing SAGA event to ensure proper API response
+        // This prevents returning 200 when balance is insufficient
+        ApiResponse<VoteCheckResponseDTO> voteCheckResponse = gamificationServiceClient.checkVoteEligibility();
+        if (voteCheckResponse == null || voteCheckResponse.getData() == null) {
+            throw new ValidationException("Unable to check vote eligibility. Please try again later.");
+        }
+        
+        VoteCheckResponseDTO voteCheck = voteCheckResponse.getData();
+        if (!voteCheck.isCanVote()) {
+            String message = voteCheck.getMessage();
+            throw new ValidationException(
+                message != null ? message : "Not enough Yuan to vote"
+            );
+        }
+
+        // Generate unique SAGA ID
+        String sagaId = "vote-" + UUID.randomUUID().toString();
+
+        // Publish SAGA start event (Yuan reservation will happen asynchronously)
+        // Balance is already checked above, so reservation should succeed
+        // The vote will be created by VoteSagaListener when Yuan is reserved
+        transactionAwareKafkaPublisher.publishAfterCommit(() -> {
+            kafkaEventProducerService.publishVoteSagaStartEvent(sagaId, userId, novelId);
+        });
+
+        // Return optimistic response (vote creation happens asynchronously)
+        // Note: In a real production system, you might want to wait for confirmation
+        // or return a pending status and poll for completion
+        Integer currentVoteCount = (int) voteRepository.countByNovelId(novelId);
+        
+        // Note: remainedYuan is not available immediately in SAGA flow
+        // It will be updated after Yuan reservation
+        return new VoteResponseDTO(novelId, currentVoteCount, true, null);
+    }
+
+    /**
+     * Legacy vote creation method (non-SAGA)
+     */
+    @Transactional
+    public VoteResponseDTO createVoteLegacy(Integer novelId, UUID userId) {
         // Validate novel exists and get authorId via content service
         ApiResponse<NovelDetailResponseDTO> novelResp = contentServiceClient.getNovelById(novelId);
         if (novelResp == null || novelResp.getData() == null) {
