@@ -182,4 +182,26 @@ public class KafkaEventProducerService {
             log.error("Failed to publish NOVEL_VOTE_COUNT_UPDATE event for novel ID: {}", novelId, e);
         }
     }
+
+    /**
+     * Publish Vote SAGA Start Event
+     * Published when starting vote creation SAGA
+     */
+    public void publishVoteSagaStartEvent(String sagaId, UUID userId, Integer novelId) {
+        try {
+            com.yushan.engagement_service.dto.event.VoteSagaStartEvent event = 
+                com.yushan.engagement_service.dto.event.VoteSagaStartEvent.builder()
+                    .sagaId(sagaId)
+                    .userId(userId)
+                    .novelId(novelId)
+                    .timestamp(java.time.LocalDateTime.now())
+                    .build();
+            
+            publishEvent("vote-saga.start", sagaId, event);
+            log.info("Published VoteSagaStartEvent: sagaId={}, userId={}, novelId={}", sagaId, userId, novelId);
+        } catch (Exception e) {
+            log.error("Failed to publish VoteSagaStartEvent: sagaId={}", sagaId, e);
+            throw new RuntimeException("Failed to publish Vote SAGA start event", e);
+        }
+    }
 }

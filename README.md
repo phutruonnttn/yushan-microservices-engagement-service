@@ -199,7 +199,8 @@ Instances currently registered with Eureka:
 ### 🗳️ Vote System
 - Vote for novels (can vote multiple times)
 - Vote history tracking
-- Integration with Gamification Service (Yuan deduction)
+- Integration with Gamification Service (Yuan deduction) - **SAGA Pattern implemented**
+- **Distributed Transaction Management**: Choreography SAGA pattern ensures atomicity between vote creation and Yuan deduction
 
 ### 🚨 Report System
 - Report novels for inappropriate content
@@ -217,6 +218,7 @@ The Engagement Service uses the following key entities:
 - **Review** - User reviews with ratings (one per novel per user)
 - **Vote** - User votes for novels
 - **Report** - Content reports for moderation (novels and comments)
+- **ProcessedEvent** - Idempotency tracking for Kafka event consumers (prevents duplicate processing)
 
 ---
 
@@ -233,6 +235,7 @@ Once this basic setup is working:
 8. ✅ Add content moderation system
 9. ✅ Implement recommendation algorithm
 10. ✅ Set up Elasticsearch for search (optional)
+11. ✅ Implement SAGA Pattern for Vote Creation Flow (distributed transaction management)
 
 ---
 
@@ -455,8 +458,36 @@ The Engagement Service publishes events for:
 - Rating given
 - Novel followed
 - Reading progress updated
+- **SAGA Events**: Vote Creation Flow events (`vote-saga.start`, `vote-saga.yuan-reserved`, `vote-saga.vote-created`, `vote-saga.failed`)
 
 These events are consumed by Analytics and Gamification services.
+
+### SAGA Pattern - Vote Creation Flow
+
+The Engagement Service implements the **Choreography SAGA pattern** for Vote Creation Flow to ensure atomicity between vote creation (Engagement Service) and Yuan deduction (Gamification Service).
+
+**SAGA Flow**:
+1. User requests vote → Balance check (synchronous, fail fast)
+2. Publish `VoteSagaStartEvent` → Gamification Service reserves Yuan
+3. Receive `VoteSagaYuanReservedEvent` → Create vote in database
+4. Publish `VoteSagaVoteCreatedEvent` → Gamification Service confirms Yuan deduction
+5. On failures → Automatic compensation (Yuan release)
+
+**Key Components**:
+- `VoteService.createVoteWithSaga()`: Initiates SAGA flow with balance check
+- `VoteSagaListener`: Handles SAGA events (`vote-saga.yuan-reserved`)
+- `IdempotencyService`: Ensures exactly-once processing of SAGA events (hybrid: Redis + Database)
+
+**Features**:
+- ✅ Balance check before SAGA starts (returns 400 when insufficient balance)
+- ✅ Vote creation only happens after Yuan is reserved
+- ✅ Automatic compensation on failures (no orphaned votes)
+- ✅ Idempotent event processing (prevents duplicate vote creation)
+- ✅ Feature flag: `saga.vote-creation.enabled` for gradual rollout
+
+**API Contract**:
+- **400 Bad Request**: When balance is insufficient (before SAGA starts)
+- **200 OK**: When vote creation is successful (SAGA completes successfully)
 
 ---
 
